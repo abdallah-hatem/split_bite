@@ -5,6 +5,7 @@ import {
   computeNetBalances,
   optimizeSettlements,
 } from "@/src/utils/settlement";
+import { notifySettlement } from "@/src/utils/notifications";
 
 export type OrderDebt = {
   orderId: string;
@@ -152,6 +153,19 @@ export function useSettleUp() {
       });
 
       if (error) throw error;
+
+      // Send notification
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user!.id)
+        .single();
+
+      notifySettlement(
+        toUserId,
+        profile?.display_name ?? "Someone",
+        amount
+      );
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({

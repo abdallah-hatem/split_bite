@@ -26,6 +26,7 @@ import {
   CalcPayment,
 } from "@/src/utils/calculations";
 import { formatCurrency } from "@/src/utils/currency";
+import { notifyOrderFinalized } from "@/src/utils/notifications";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -277,6 +278,20 @@ export default function FinalizeScreen() {
               orderId,
               status: "finalized",
             });
+
+            // Send notification
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("display_name")
+              .eq("id", user!.id)
+              .single();
+
+            notifyOrderFinalized(
+              groupId,
+              order?.title ?? "Order",
+              profile?.display_name ?? "Someone",
+              user!.id
+            );
 
             router.replace(
               `/(tabs)/groups/${groupId}/orders/${orderId}/summary` as any

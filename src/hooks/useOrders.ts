@@ -1,6 +1,7 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/providers/AuthProvider";
+import { notifyOrderCreated } from "@/src/utils/notifications";
 
 export type Order = {
   id: string;
@@ -168,10 +169,24 @@ export function useCreateOrder() {
 
       return order as Order;
     },
-    onSuccess: (order) => {
+    onSuccess: async (order) => {
       queryClient.invalidateQueries({
         queryKey: orderKeys.all(order.group_id),
       });
+
+      // Send push notification to group members
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user!.id)
+        .single();
+
+      notifyOrderCreated(
+        order.group_id,
+        order.title,
+        profile?.display_name ?? "Someone",
+        user!.id
+      );
     },
   });
 }

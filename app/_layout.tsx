@@ -12,6 +12,7 @@ import { useEffect } from "react";
 import "react-native-reanimated";
 import { AuthProvider, useAuth } from "@/src/providers/AuthProvider";
 import { QueryProvider } from "@/src/providers/QueryProvider";
+import { usePushNotifications } from "@/src/hooks/usePushNotifications";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -54,6 +55,9 @@ function RootLayoutNav() {
   const { session, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  // Register push notifications
+  usePushNotifications();
 
   useEffect(() => {
     if (isLoading) return;
