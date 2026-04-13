@@ -33,15 +33,18 @@ async function sendPushNotifications(
 
   // Send via Expo Push API
   try {
-    await fetch("https://exp.host/--/api/v2/push/send", {
+    console.log(`[Notifications] Sending to ${messages.length} device(s):`, messages.map(m => m.to));
+    const response = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(messages),
     });
+    const result = await response.json();
+    console.log("[Notifications] Response:", JSON.stringify(result));
   } catch (error) {
-    console.warn("Failed to send push notifications:", error);
+    console.warn("[Notifications] Failed:", error);
   }
 }
 
@@ -55,11 +58,13 @@ export async function notifyOrderCreated(
   creatorId: string
 ) {
   // Get all group members except the creator
-  const { data: members } = await supabase
+  const { data: members, error } = await supabase
     .from("group_members")
     .select("user_id")
     .eq("group_id", groupId)
     .neq("user_id", creatorId);
+
+  console.log(`[Notifications] notifyOrderCreated: group=${groupId}, creator=${creatorId}, members=${JSON.stringify(members)}, error=${error?.message}`);
 
   const userIds = (members ?? []).map((m) => m.user_id);
 

@@ -336,9 +336,10 @@ create policy "ledger_entries_insert" on public.ledger_entries
 -- ============================================
 -- PUSH TOKENS
 -- ============================================
+-- Any authenticated user can read push tokens (needed to send notifications to group members)
 create policy "push_tokens_select" on public.push_tokens
   for select to authenticated
-  using (user_id = auth.uid());
+  using (true);
 
 create policy "push_tokens_insert" on public.push_tokens
   for insert to authenticated

@@ -326,6 +326,11 @@ export default function OrderDetail() {
   const myParticipant = participants?.find((p) => p.user_id === user?.id);
 
   const handleLock = () => {
+    if (!items?.length) {
+      Alert.alert("No Items", "Add at least one item before locking the order.");
+      return;
+    }
+
     Alert.alert(
       "Lock Order",
       "No more items can be added after locking.",
@@ -562,8 +567,8 @@ export default function OrderDetail() {
               </TouchableOpacity>
             )}
 
-            {!myParticipant && isOpen && (
-              <JoinOrderButton orderId={orderId} userId={user!.id} onJoined={refetchParticipants} />
+            {!myParticipant && isOpen && user && (
+              <JoinOrderButton orderId={orderId} userId={user.id} onJoined={refetchParticipants} />
             )}
           </View>
         }

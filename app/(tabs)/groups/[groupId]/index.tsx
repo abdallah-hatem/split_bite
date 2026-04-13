@@ -8,7 +8,8 @@ import {
   RefreshControl,
   Alert,
 } from "react-native";
-import { useLocalSearchParams, Link, Stack, router } from "expo-router";
+import { useLocalSearchParams, Link, Stack, router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import { useGroup, useGroupMembers } from "@/src/hooks/useGroup";
 import { useOrders } from "@/src/hooks/useOrders";
@@ -36,11 +37,20 @@ export default function GroupDetail() {
   } = useOrders(groupId);
 
   const orders = ordersData?.pages.flat() ?? [];
+  const [pullRefreshing, setPullRefreshing] = useState(false);
 
-  const refetchAll = () => {
-    refetchGroup();
-    refetchMembers();
-    refetchOrders();
+  useFocusEffect(
+    useCallback(() => {
+      refetchGroup();
+      refetchMembers();
+      refetchOrders();
+    }, [])
+  );
+
+  const onPullRefresh = async () => {
+    setPullRefreshing(true);
+    await Promise.all([refetchGroup(), refetchMembers(), refetchOrders()]);
+    setPullRefreshing(false);
   };
 
   const isOwner = group?.created_by === user?.id;
@@ -126,7 +136,7 @@ export default function GroupDetail() {
         onEndReached={() => hasNextPage && fetchNextPage()}
         onEndReachedThreshold={0.3}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetchAll} />
+          <RefreshControl refreshing={pullRefreshing} onRefresh={onPullRefresh} />
         }
         ListHeaderComponent={
           <View>

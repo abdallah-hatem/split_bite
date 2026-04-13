@@ -181,12 +181,16 @@ export function useCreateOrder() {
         .eq("id", user!.id)
         .single();
 
-      notifyOrderCreated(
-        order.group_id,
-        order.title,
-        profile?.display_name ?? "Someone",
-        user!.id
-      );
+      try {
+        await notifyOrderCreated(
+          order.group_id,
+          order.title,
+          profile?.display_name ?? "Someone",
+          user!.id
+        );
+      } catch (e) {
+        console.warn("[Notifications] Error in onSuccess:", e);
+      }
     },
   });
 }
