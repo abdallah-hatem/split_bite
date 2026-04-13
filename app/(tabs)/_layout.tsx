@@ -43,9 +43,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
         }}
       />
-      {/* Hide old template screens from tabs */}
+      {/* Hide default index from tabs */}
       <Tabs.Screen name="index" options={{ href: null }} />
-      <Tabs.Screen name="two" options={{ href: null }} />
     </Tabs>
   );
 }

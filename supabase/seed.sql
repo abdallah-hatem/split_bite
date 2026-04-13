@@ -1,0 +1,3 @@
+-- Seed file intentionally empty.
+-- Test users are created via the auth API after `supabase db reset`.
+-- Run: ./scripts/seed-users.sh

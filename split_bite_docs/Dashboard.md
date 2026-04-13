@@ -1,51 +1,59 @@
 # SplitBite Dashboard
 
 ## Project Status
-**Current Phase:** Phase 1 - Foundation
+**Current Phase:** Phase 4 - Calculations & Finalization
 **Last Updated:** 2026-04-13
 
 ---
 
-## Active Work
-- [x] Project scaffolding (Expo + TypeScript)
-- [x] Supabase initialization
-- [x] Auth provider + Supabase client with SecureStore
-- [x] Tab navigation (Groups, Activity, Profile)
-- [x] Auth screens (Sign In, Sign Up)
-- [x] Database schema migration (all tables)
-- [x] RLS policies migration
-- [x] Jest test setup
-- [ ] Connect to Supabase cloud project
-- [ ] Verify auth flow end-to-end
+## Completed
+### Phase 1: Foundation
+- [x] Expo SDK 54 + TypeScript scaffold
+- [x] Supabase local dev (auth, DB, realtime)
+- [x] Auth flow with SecureStore session persistence
+- [x] Full database schema (11 tables + RLS + triggers)
+- [x] Jest + RNTL + MSW test infrastructure
+
+### Phase 2: Groups
+- [x] Groups list with active order indicators
+- [x] Create/Join group flows
+- [x] Group detail (members, invite code, orders)
+- [x] TanStack Query hooks (`useGroups`, `useGroup`, `useGroupMembers`)
+- [x] Extracted components (`GroupCard`, `MemberRow`)
+
+### Phase 3: Orders & Items
+- [x] Create Order screen
+- [x] Order Detail with items, participants, status
+- [x] Add Item modal (full-screen, keyboard-safe)
+- [x] Add Guest modal (full-screen)
+- [x] Order lifecycle (lock/reopen/delete)
+- [x] Supabase Realtime (live item + participant updates)
+- [x] TanStack Query hooks (useOrders, useOrder, useAddItem, etc.)
+- [x] `OrderCard` component with status badges
 
 ---
 
-## Phase Overview
-| Phase | Status | Description |
-|-------|--------|-------------|
-| 1. Foundation | In Progress | Auth, project setup, DB schema |
-| 2. Groups | Not Started | Group CRUD, invite system |
-| 3. Orders & Items | Not Started | Collaborative ordering, realtime |
-| 4. Calculations | Not Started | Split engine, finalization, ledger |
-| 5. Polish | Not Started | Balances, settlements, notifications |
+## Active Work: Phase 4
+- [ ] Build `calculations.ts` — split engine
+- [ ] Build `settlement.ts` — min-transaction algorithm
+- [ ] Build Finalize screen
+- [ ] Build `finalize-order` Edge Function
+- [ ] Build Order Summary screen
+- [ ] Implement calculation + settlement tests (40+ cases)
 
 ---
 
-## Quick Links
-- [[01-requirements/PRD|Product Requirements]]
-- [[02-architecture/overview|Architecture Overview]]
-- [[02-architecture/database-schema|Database Schema]]
-- [[04-implementation/phase-1-foundation|Phase 1 Details]]
-
----
-
-## Recent Sessions
-- [[Sessions/2026-04-13 - Project Kickoff|2026-04-13: Project Kickoff]]
+## Key Decisions
+- `is_group_member()` security definer function for RLS (avoids recursion)
+- `created_by` defaults to `auth.uid()` in DB
+- Full-screen modals (not bottom sheets) for keyboard compatibility
+- Groups SELECT open to all authenticated (needed for invite code lookup)
+- Active order metadata fetched with groups in single query
 
 ---
 
 ## Tech Stack
-- **Frontend:** Expo (React Native) + TypeScript
+- **Frontend:** Expo SDK 54 + TypeScript + Expo Router v6
 - **Backend:** Supabase (Auth, Postgres, Realtime, Edge Functions)
-- **State:** TanStack Query + Supabase Realtime
-- **Testing:** Jest, RNTL, MSW, pgTAP, Maestro
+- **State:** TanStack Query v5 + Supabase Realtime
+- **Testing:** Jest + jest-expo (configured), RNTL, MSW (setup done)

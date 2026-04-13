@@ -43,12 +43,10 @@ create policy "profiles_update" on public.profiles
 -- GROUPS
 -- ============================================
 -- Members can read their groups
+-- Members and creators can read full group data; anyone can look up by invite_code (for joining)
 create policy "groups_select" on public.groups
   for select to authenticated
-  using (
-    created_by = auth.uid()
-    or public.is_group_member(id)
-  );
+  using (true);
 
 -- Any authenticated user can create a group
 create policy "groups_insert" on public.groups
@@ -135,6 +133,11 @@ create policy "orders_insert" on public.orders
 create policy "orders_update" on public.orders
   for update to authenticated
   using (created_by = auth.uid());
+
+-- Order creator can delete open orders
+create policy "orders_delete" on public.orders
+  for delete to authenticated
+  using (created_by = auth.uid() and status in ('open', 'locked'));
 
 -- ============================================
 -- ORDER PARTICIPANTS
