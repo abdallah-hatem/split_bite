@@ -175,6 +175,16 @@ export default function FinalizeScreen() {
       return;
     }
 
+    const expectedTotal = round2(itemsSum + taxNum + vatNum + deliveryNum - discountNum);
+    const totalDiff = round2(totalNum - expectedTotal);
+    if (Math.abs(totalDiff) > 0.01) {
+      Alert.alert(
+        "Total Mismatch",
+        `Items (${formatCurrency(itemsSum)}) + Tax (${formatCurrency(taxNum)}) + VAT (${formatCurrency(vatNum)}) + Delivery (${formatCurrency(deliveryNum)}) - Discount (${formatCurrency(discountNum)}) = ${formatCurrency(expectedTotal)}\n\nBut bill total is ${formatCurrency(totalNum)}.\n\nDifference: ${formatCurrency(Math.abs(totalDiff))}\n\nPlease adjust item prices or fees to match the bill total.`
+      );
+      return;
+    }
+
     if (hasPayments && Math.abs(paymentsDiff) > 0.01) {
       Alert.alert(
         "Payments Don't Match",

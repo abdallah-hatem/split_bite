@@ -68,8 +68,17 @@ function EntryRow({ entry, userId }: { entry: LedgerEntry; userId: string }) {
 
 export default function ActivityScreen() {
   const { user } = useAuth();
-  const { data: entries, isLoading, refetch } = useActivityFeed();
+  const {
+    data: entriesData,
+    isLoading,
+    refetch,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useActivityFeed();
   const [pullRefreshing, setPullRefreshing] = useState(false);
+
+  const entries = entriesData?.pages.flat() ?? [];
 
   useFocusEffect(
     useCallback(() => {
@@ -95,8 +104,10 @@ export default function ActivityScreen() {
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.content}
-      data={entries ?? []}
+      data={entries}
       keyExtractor={(item) => item.id}
+      onEndReached={() => hasNextPage && fetchNextPage()}
+      onEndReachedThreshold={0.3}
       refreshControl={
         <RefreshControl refreshing={pullRefreshing} onRefresh={onPullRefresh} />
       }
@@ -107,6 +118,15 @@ export default function ActivityScreen() {
             Your order splits and settlements will appear here
           </Text>
         </View>
+      }
+      ListFooterComponent={
+        isFetchingNextPage ? (
+          <ActivityIndicator
+            size="small"
+            color={Colors.primary}
+            style={{ paddingVertical: Spacing.md }}
+          />
+        ) : null
       }
       renderItem={({ item }) => (
         <EntryRow entry={item} userId={user!.id} />

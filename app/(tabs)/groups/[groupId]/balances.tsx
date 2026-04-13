@@ -106,28 +106,55 @@ export default function BalancesScreen() {
           <Text style={styles.sectionTitle}>Your Balances</Text>
           {myBalances.map((b) => (
             <View key={b.userId} style={styles.balanceCard}>
-              <View style={styles.balanceInfo}>
-                <Text style={styles.balanceName}>{b.displayName}</Text>
-                <Text
-                  style={[
-                    styles.balanceAmount,
-                    { color: b.net > 0 ? Colors.success : Colors.error },
-                  ]}
-                >
-                  {b.net > 0
-                    ? `Owes you ${formatCurrency(b.net)}`
-                    : `You owe ${formatCurrency(Math.abs(b.net))}`}
-                </Text>
+              <View style={styles.balanceHeader}>
+                <View style={styles.balanceInfo}>
+                  <Text style={styles.balanceName}>{b.displayName}</Text>
+                  <Text
+                    style={[
+                      styles.balanceAmount,
+                      { color: b.net > 0 ? Colors.success : Colors.error },
+                    ]}
+                  >
+                    {b.net > 0
+                      ? `Owes you ${formatCurrency(b.net)}`
+                      : `You owe ${formatCurrency(Math.abs(b.net))}`}
+                  </Text>
+                </View>
+                {b.net < 0 && (
+                  <TouchableOpacity
+                    style={styles.settleButton}
+                    onPress={() =>
+                      handleSettle(b.userId, b.displayName, Math.abs(b.net))
+                    }
+                  >
+                    <Text style={styles.settleButtonText}>Settle Up</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-              {b.net < 0 && (
-                <TouchableOpacity
-                  style={styles.settleButton}
-                  onPress={() =>
-                    handleSettle(b.userId, b.displayName, Math.abs(b.net))
-                  }
-                >
-                  <Text style={styles.settleButtonText}>Settle Up</Text>
-                </TouchableOpacity>
+
+              {/* Order breakdown */}
+              {b.orders.length > 0 && (
+                <View style={styles.orderBreakdown}>
+                  {b.orders.map((o, i) => (
+                    <View key={`${o.orderId}-${i}`} style={styles.orderRow}>
+                      <View style={styles.orderInfo}>
+                        <Text style={styles.orderTitle}>{o.orderTitle}</Text>
+                        <Text style={styles.orderDate}>
+                          {new Date(o.date).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.orderAmount,
+                          { color: o.amount > 0 ? Colors.success : Colors.error },
+                        ]}
+                      >
+                        {o.amount > 0 ? "+" : ""}
+                        {formatCurrency(o.amount)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
               )}
             </View>
           ))}
@@ -172,12 +199,19 @@ const styles = StyleSheet.create({
   summaryAmount: { fontSize: FontSize.xl, fontWeight: "700" },
   settledText: { fontSize: FontSize.lg, fontWeight: "600", color: Colors.success },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: "700", color: Colors.text, marginBottom: Spacing.sm },
-  balanceCard: { flexDirection: "row", alignItems: "center", backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.sm },
+  balanceCard: { backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.sm },
+  balanceHeader: { flexDirection: "row", alignItems: "center" },
   balanceInfo: { flex: 1 },
   balanceName: { fontSize: FontSize.md, fontWeight: "600", color: Colors.text },
   balanceAmount: { fontSize: FontSize.sm, fontWeight: "500", marginTop: 2 },
   settleButton: { backgroundColor: Colors.primary, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm },
   settleButtonText: { color: "#FFFFFF", fontSize: FontSize.sm, fontWeight: "600" },
+  orderBreakdown: { marginTop: Spacing.sm, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
+  orderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.xs },
+  orderInfo: { flex: 1 },
+  orderTitle: { fontSize: FontSize.sm, color: Colors.text },
+  orderDate: { fontSize: FontSize.xs, color: Colors.textTertiary },
+  orderAmount: { fontSize: FontSize.sm, fontWeight: "600" },
   card: { backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
   settlementRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
   settlementArrow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, flex: 1 },

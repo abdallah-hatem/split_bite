@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
   Alert,
   ActivityIndicator,
@@ -16,8 +15,6 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -35,29 +32,6 @@ export default function ProfileScreen() {
       setDisplayName(data.display_name);
     }
     setLoading(false);
-  };
-
-  const handleSave = async () => {
-    if (!displayName.trim()) {
-      Alert.alert("Error", "Display name can't be empty");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ display_name: displayName.trim() })
-        .eq("id", user!.id);
-
-      if (error) throw error;
-      setDirty(false);
-      Alert.alert("Saved", "Your profile has been updated");
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleSignOut = () => {
@@ -83,33 +57,8 @@ export default function ProfileScreen() {
             {displayName?.[0]?.toUpperCase() ?? "?"}
           </Text>
         </View>
+        <Text style={styles.displayName}>{displayName}</Text>
         <Text style={styles.email}>{user?.email}</Text>
-      </View>
-
-      <View style={styles.form}>
-        <Text style={styles.label}>Display Name</Text>
-        <TextInput
-          style={styles.input}
-          value={displayName}
-          onChangeText={(v) => {
-            setDisplayName(v);
-            setDirty(true);
-          }}
-          placeholder="Your name"
-          placeholderTextColor={Colors.textTertiary}
-        />
-
-        {dirty && (
-          <TouchableOpacity
-            style={[styles.saveButton, saving && { opacity: 0.6 }]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text style={styles.saveButtonText}>
-              {saving ? "Saving..." : "Save Changes"}
-            </Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <View style={styles.spacer} />
@@ -127,12 +76,8 @@ const styles = StyleSheet.create({
   avatarSection: { alignItems: "center", marginTop: Spacing.lg, marginBottom: Spacing.xl },
   avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary, justifyContent: "center", alignItems: "center", marginBottom: Spacing.sm },
   avatarText: { color: "#FFFFFF", fontSize: FontSize.xxxl, fontWeight: "700" },
+  displayName: { fontSize: FontSize.xl, fontWeight: "700", color: Colors.text, marginBottom: Spacing.xs },
   email: { fontSize: FontSize.sm, color: Colors.textSecondary },
-  form: { gap: Spacing.xs },
-  label: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.text },
-  input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.md, fontSize: FontSize.md, color: Colors.text },
-  saveButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center", marginTop: Spacing.sm },
-  saveButtonText: { color: "#FFFFFF", fontSize: FontSize.md, fontWeight: "600" },
   spacer: { flex: 1 },
   signOutButton: { backgroundColor: Colors.errorLight, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center", marginBottom: Spacing.lg },
   signOutText: { color: Colors.error, fontSize: FontSize.md, fontWeight: "600" },

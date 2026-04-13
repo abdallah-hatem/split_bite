@@ -1,12 +1,14 @@
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Member } from "@/src/hooks/useGroup";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 type Props = {
   member: Member;
+  canKick?: boolean;
+  onKick?: () => void;
 };
 
-export function MemberRow({ member }: Props) {
+export function MemberRow({ member, canKick, onKick }: Props) {
   const name = member.profiles.display_name || "Unknown";
 
   return (
@@ -17,6 +19,11 @@ export function MemberRow({ member }: Props) {
       <Text style={styles.name}>{name}</Text>
       {member.role === "admin" && (
         <Text style={styles.badge}>Admin</Text>
+      )}
+      {canKick && (
+        <TouchableOpacity style={styles.kickButton} onPress={onKick}>
+          <Text style={styles.kickText}>Remove</Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -56,5 +63,14 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: BorderRadius.sm,
     overflow: "hidden",
+  },
+  kickButton: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  kickText: {
+    fontSize: FontSize.xs,
+    color: Colors.error,
+    fontWeight: "600",
   },
 });

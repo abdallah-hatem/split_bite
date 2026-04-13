@@ -6,10 +6,19 @@ import {
   optimizeSettlements,
 } from "@/src/utils/settlement";
 
+export type OrderDebt = {
+  orderId: string;
+  orderTitle: string;
+  amount: number;
+  type: string;
+  date: string;
+};
+
 export type PairwiseBalance = {
   userId: string;
   displayName: string;
   net: number; // positive = they owe you, negative = you owe them
+  orders: OrderDebt[]; // breakdown by order
 };
 
 export const balanceKeys = {
@@ -22,11 +31,12 @@ export function useGroupBalances(groupId: string) {
   return useQuery({
     queryKey: balanceKeys.group(groupId),
     queryFn: async () => {
-      // Fetch all ledger entries for this group
+      // Fetch all ledger entries with order details
       const { data: entries, error } = await supabase
         .from("ledger_entries")
-        .select("from_user_id, to_user_id, amount")
-        .eq("group_id", groupId);
+        .select("*, order:order_id(id, title)")
+        .eq("group_id", groupId)
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
 
@@ -42,11 +52,11 @@ export function useGroupBalances(groupId: string) {
       // Compute optimal settlements
       const settlements = optimizeSettlements(netBalances);
 
-      // Fetch profile names for all involved users
+      // Fetch profile names
       const userIds = new Set<string>();
-      for (const s of settlements) {
-        userIds.add(s.fromUserId);
-        userIds.add(s.toUserId);
+      for (const e of entries ?? []) {
+        userIds.add(e.from_user_id);
+        userIds.add(e.to_user_id);
       }
 
       const { data: profiles } = await supabase
@@ -59,23 +69,46 @@ export function useGroupBalances(groupId: string) {
         nameMap.set(p.id, p.display_name);
       }
 
-      // Build pairwise balances relative to current user
+      // Build per-user order breakdowns relative to current user
+      const userOrderMap = new Map<string, OrderDebt[]>();
+
+      for (const e of entries ?? []) {
+        const isFrom = e.from_user_id === user?.id;
+        const isTo = e.to_user_id === user?.id;
+        if (!isFrom && !isTo) continue;
+
+        const otherUserId = isFrom ? e.to_user_id : e.from_user_id;
+        const orderDebt: OrderDebt = {
+          orderId: (e.order as any)?.id ?? "",
+          orderTitle: (e.order as any)?.title ?? (e.type === "settlement" ? "Settlement" : "Unknown"),
+          amount: isFrom ? -e.amount : e.amount, // negative = I owe, positive = they owe me
+          type: e.type,
+          date: e.created_at,
+        };
+
+        if (!userOrderMap.has(otherUserId)) {
+          userOrderMap.set(otherUserId, []);
+        }
+        userOrderMap.get(otherUserId)!.push(orderDebt);
+      }
+
+      // Build pairwise balances
       const myBalances: PairwiseBalance[] = [];
 
       for (const s of settlements) {
         if (s.fromUserId === user?.id) {
-          // I owe someone
           myBalances.push({
             userId: s.toUserId,
             displayName: nameMap.get(s.toUserId) ?? "Unknown",
             net: -s.amount,
+            orders: userOrderMap.get(s.toUserId) ?? [],
           });
         } else if (s.toUserId === user?.id) {
-          // Someone owes me
           myBalances.push({
             userId: s.fromUserId,
             displayName: nameMap.get(s.fromUserId) ?? "Unknown",
             net: s.amount,
+            orders: userOrderMap.get(s.fromUserId) ?? [],
           });
         }
       }
@@ -107,10 +140,12 @@ export function useSettleUp() {
       toUserId: string;
       amount: number;
     }) => {
+      // Settlement reverses the debt: if I owe them, the settlement
+      // records them as owing me (cancels out the original debt)
       const { error } = await supabase.from("ledger_entries").insert({
         group_id: groupId,
-        from_user_id: user!.id,
-        to_user_id: toUserId,
+        from_user_id: toUserId,
+        to_user_id: user!.id,
         amount,
         type: "settlement",
         description: "Manual settlement",

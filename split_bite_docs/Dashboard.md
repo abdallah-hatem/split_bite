@@ -1,8 +1,8 @@
 # SplitBite Dashboard
 
 ## Project Status
-**Current Phase:** Phase 5 - Balances, Settlements & Polish
-**Last Updated:** 2026-04-13
+**Current Phase:** Phase 5 - Final polish + Push notifications
+**Last Updated:** 2026-04-14
 
 ---
 
@@ -11,32 +11,30 @@
 ### Phase 2: Groups - DONE
 ### Phase 3: Orders & Items - DONE
 ### Phase 4: Calculations & Finalization - DONE
+### Phase 5: Balances, Activity, Profile - DONE (except push notifications)
 
 ---
 
-## Active Work: Phase 5
-- [ ] Balances screen (group-wide net balances)
-- [ ] Settle Up flow
-- [ ] Activity feed
-- [ ] Push notifications
-- [ ] Profile editing
+## Remaining
+- [ ] Push notifications (order created, finalized, settlement)
+- [ ] Deep link handling for invite codes
 
 ---
 
 ## Key Features Working
 - Auth (sign up/in/out with session persistence)
-- Groups (create, join via invite code, leave, member list)
+- Groups (create, join via invite code, leave, kick members, member list)
 - Orders (create, add items with split options, add guests, lock/reopen/delete)
+- Item splitting (just me / split with specific people / everyone)
 - Real-time collaboration (Supabase Realtime)
-- Bill finalization (editable prices, tax/VAT/delivery/discount, multi-payer, payment validation)
+- Bill finalization (editable prices, tax/VAT/delivery/discount, multi-payer)
+- Total validation (items + fees must equal bill total)
+- Payment validation (payments must match bill total)
 - Order summary (full breakdown, who paid, per-person split, settlements)
+- Group balances with per-order debt breakdown
+- Settle up flow with ledger reversal
+- Activity feed (paginated, all ledger entries across groups)
+- Paginated orders list and activity feed (infinite scroll)
 - Group cards show active orders, owner badge, "your order" indicator
-- 35 unit tests passing (calculations + settlement)
-
----
-
-## Tech Stack
-- **Frontend:** Expo SDK 54 + TypeScript + Expo Router v6
-- **Backend:** Supabase (Auth, Postgres, Realtime)
-- **State:** TanStack Query v5 + Supabase Realtime
-- **Testing:** Jest + jest-expo (35 tests passing)
+- Profile with sign out
+- 35 unit tests passing

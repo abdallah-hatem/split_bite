@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/providers/AuthProvider";
 
@@ -52,18 +52,26 @@ export const orderKeys = {
   items: (id: string) => ["orders", id, "items"] as const,
 };
 
+const PAGE_SIZE = 10;
+
 export function useOrders(groupId: string) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: orderKeys.all(groupId),
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 0 }) => {
       const { data, error } = await supabase
         .from("orders")
         .select("*")
         .eq("group_id", groupId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(pageParam, pageParam + PAGE_SIZE - 1);
 
       if (error) throw error;
       return data as Order[];
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < PAGE_SIZE) return undefined;
+      return allPages.flat().length;
     },
     enabled: !!groupId,
   });

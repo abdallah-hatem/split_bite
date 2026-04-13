@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/src/lib/supabase";
 
 export type LedgerEntry = {
@@ -17,20 +17,27 @@ export type LedgerEntry = {
   order: { title: string } | null;
 };
 
+const ACTIVITY_PAGE_SIZE = 15;
+
 export function useActivityFeed() {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["activity"],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 0 }) => {
       const { data, error } = await supabase
         .from("ledger_entries")
         .select(
           "*, from_profile:from_user_id(display_name), to_profile:to_user_id(display_name), group:group_id(name), order:order_id(title)"
         )
         .order("created_at", { ascending: false })
-        .limit(50);
+        .range(pageParam, pageParam + ACTIVITY_PAGE_SIZE - 1);
 
       if (error) throw error;
       return data as unknown as LedgerEntry[];
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.length < ACTIVITY_PAGE_SIZE) return undefined;
+      return allPages.flat().length;
     },
   });
 }

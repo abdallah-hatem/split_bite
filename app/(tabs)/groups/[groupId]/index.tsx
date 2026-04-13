@@ -26,7 +26,16 @@ export default function GroupDetail() {
   const queryClient = useQueryClient();
   const { data: group, isLoading: groupLoading, refetch: refetchGroup } = useGroup(groupId);
   const { data: members, refetch: refetchMembers } = useGroupMembers(groupId);
-  const { data: orders, refetch: refetchOrders, isRefetching } = useOrders(groupId);
+  const {
+    data: ordersData,
+    refetch: refetchOrders,
+    isRefetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useOrders(groupId);
+
+  const orders = ordersData?.pages.flat() ?? [];
 
   const refetchAll = () => {
     refetchGroup();
@@ -65,6 +74,33 @@ export default function GroupDetail() {
     );
   };
 
+  const handleKickMember = (member: any) => {
+    const name = member.profiles?.display_name ?? "this member";
+    Alert.alert(
+      "Remove Member",
+      `Are you sure you want to remove ${name} from the group?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from("group_members")
+                .delete()
+                .eq("id", member.id);
+              if (error) throw error;
+              refetchMembers();
+            } catch (error: any) {
+              Alert.alert("Error", error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const copyInviteCode = async () => {
     if (group) {
       await Clipboard.setStringAsync(group.invite_code);
@@ -85,8 +121,10 @@ export default function GroupDetail() {
       <Stack.Screen options={{ title: group.name }} />
 
       <FlatList
-        data={orders ?? []}
+        data={orders}
         keyExtractor={(item) => item.id}
+        onEndReached={() => hasNextPage && fetchNextPage()}
+        onEndReachedThreshold={0.3}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={refetchAll} />
         }
@@ -124,7 +162,14 @@ export default function GroupDetail() {
               <Text style={styles.sectionTitle}>
                 Members ({members?.length ?? 0})
               </Text>
-              {members?.map((m) => <MemberRow key={m.id} member={m} />)}
+              {members?.map((m) => (
+                <MemberRow
+                  key={m.id}
+                  member={m}
+                  canKick={isOwner && m.user_id !== user?.id}
+                  onKick={() => handleKickMember(m)}
+                />
+              ))}
             </View>
 
             <View style={styles.ordersHeader}>
@@ -145,6 +190,15 @@ export default function GroupDetail() {
             <Text style={styles.emptyText}>No orders yet</Text>
             <Text style={styles.emptySubtext}>Start an order to split a bill</Text>
           </View>
+        }
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <ActivityIndicator
+              size="small"
+              color={Colors.primary}
+              style={{ paddingVertical: Spacing.md }}
+            />
+          ) : null
         }
         renderItem={({ item }) => (
           <OrderCard order={item} groupId={groupId} />
