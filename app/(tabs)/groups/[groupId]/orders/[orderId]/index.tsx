@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useLocalSearchParams, Stack, router } from "expo-router";
+import { useLocalSearchParams, Stack, router, Link } from "expo-router";
 import { useAuth } from "@/src/providers/AuthProvider";
 import {
   useOrder,
@@ -433,12 +433,22 @@ export default function OrderDetail() {
             )}
 
             {isOwner && isLocked && (
-              <TouchableOpacity
-                style={styles.reopenButton}
-                onPress={handleReopen}
-              >
-                <Text style={styles.reopenButtonText}>Reopen</Text>
-              </TouchableOpacity>
+              <>
+                <Link
+                  href={`/(tabs)/groups/${groupId}/orders/${orderId}/finalize` as any}
+                  asChild
+                >
+                  <TouchableOpacity style={styles.finalizeButton}>
+                    <Text style={styles.finalizeButtonText}>Finalize Bill</Text>
+                  </TouchableOpacity>
+                </Link>
+                <TouchableOpacity
+                  style={styles.reopenButton}
+                  onPress={handleReopen}
+                >
+                  <Text style={styles.reopenButtonText}>Reopen</Text>
+                </TouchableOpacity>
+              </>
             )}
 
             {isOwner && (isOpen || isLocked) && (
@@ -565,6 +575,8 @@ const styles = StyleSheet.create({
   totalAmount: { fontSize: FontSize.md, fontWeight: "700", color: Colors.text },
   lockButton: { backgroundColor: Colors.warning, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },
   lockButtonText: { color: "#FFFFFF", fontSize: FontSize.md, fontWeight: "600" },
+  finalizeButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },
+  finalizeButtonText: { color: "#FFFFFF", fontSize: FontSize.md, fontWeight: "600" },
   reopenButton: { backgroundColor: Colors.surfaceSecondary, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
   reopenButtonText: { color: Colors.text, fontSize: FontSize.md, fontWeight: "600" },
   deleteButton: { backgroundColor: Colors.errorLight, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },

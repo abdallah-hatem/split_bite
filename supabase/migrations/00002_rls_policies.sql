@@ -305,13 +305,23 @@ create policy "ledger_entries_select" on public.ledger_entries
   for select to authenticated
   using (public.is_group_member(group_id));
 
--- Settlement entries are inserted by authenticated users involved
-create policy "ledger_entries_insert_settlement" on public.ledger_entries
+-- Order owner can insert order_debt entries; members can insert settlements
+create policy "ledger_entries_insert" on public.ledger_entries
   for insert to authenticated
   with check (
-    type = 'settlement'
-    and (from_user_id = auth.uid() or to_user_id = auth.uid())
-    and public.is_group_member(group_id)
+    public.is_group_member(group_id)
+    and (
+      -- Order debts: only by the order owner
+      (type = 'order_debt' and order_id in (
+        select id from public.orders where created_by = auth.uid()
+      ))
+      -- Settlements: by involved parties
+      or (type = 'settlement' and (from_user_id = auth.uid() or to_user_id = auth.uid()))
+      -- Guest transfers: by the order owner
+      or (type = 'guest_transfer' and order_id in (
+        select id from public.orders where created_by = auth.uid()
+      ))
+    )
   );
 
 -- ============================================
