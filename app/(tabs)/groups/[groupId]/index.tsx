@@ -105,6 +105,15 @@ export default function GroupDetail() {
               <Text style={styles.copyHint}>Tap to copy</Text>
             </TouchableOpacity>
 
+            <Link
+              href={`/(tabs)/groups/${groupId}/balances` as any}
+              asChild
+            >
+              <TouchableOpacity style={styles.balancesButton}>
+                <Text style={styles.balancesButtonText}>View Balances</Text>
+              </TouchableOpacity>
+            </Link>
+
             {!isOwner && (
               <TouchableOpacity style={styles.leaveButton} onPress={handleLeaveGroup}>
                 <Text style={styles.leaveButtonText}>Leave Group</Text>
@@ -154,6 +163,8 @@ const styles = StyleSheet.create({
   groupName: { fontSize: FontSize.xxl, fontWeight: "800", color: Colors.text },
   groupDesc: { fontSize: FontSize.md, color: Colors.textSecondary, marginTop: Spacing.xs },
   inviteRow: { backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border, alignItems: "center", marginBottom: Spacing.lg },
+  balancesButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, padding: Spacing.sm, alignItems: "center", marginBottom: Spacing.sm },
+  balancesButtonText: { color: "#FFFFFF", fontSize: FontSize.sm, fontWeight: "600" },
   leaveButton: { backgroundColor: Colors.errorLight, borderRadius: BorderRadius.md, padding: Spacing.sm, alignItems: "center", marginBottom: Spacing.lg },
   leaveButtonText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: "600" },
   inviteLabel: { fontSize: FontSize.xs, color: Colors.textTertiary, letterSpacing: 1 },
