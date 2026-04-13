@@ -102,13 +102,14 @@ export function useJoinGroup() {
 
   return useMutation({
     mutationFn: async (inviteCode: string) => {
-      const { data: group, error: groupError } = await supabase
-        .from("groups")
-        .select("id")
-        .eq("invite_code", inviteCode.trim().toLowerCase())
-        .single();
+      const { data: groupId, error: rpcError } = await supabase
+        .rpc("get_group_id_by_invite_code", {
+          code: inviteCode.trim().toLowerCase(),
+        });
 
-      if (groupError || !group) throw new Error("Invalid invite code");
+      if (rpcError || !groupId) throw new Error("Invalid invite code");
+
+      const group = { id: groupId as string };
 
       const { data: existing } = await supabase
         .from("group_members")

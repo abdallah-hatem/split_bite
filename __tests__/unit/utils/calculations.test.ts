@@ -13,7 +13,8 @@ function makeInput(overrides: Partial<CalcInput> = {}): CalcInput {
     participants: [],
     actualTotal: 0,
     tax: 0,
-    tip: 0,
+    vat: 0,
+    delivery: 0,
     discount: 0,
     ...overrides,
   };
@@ -221,18 +222,18 @@ describe("Calculation Engine", () => {
       expect(result.breakdowns.find((b) => b.participantId === "p2")!.taxShare).toBe(4);
     });
 
-    it("tip distributed proportionally", () => {
+    it("delivery distributed proportionally", () => {
       const result = calculateSplit(
         makeInput({
           participants: [makeParticipant("p1"), makeParticipant("p2")],
           items: [makeItem("i1", 50, "p1"), makeItem("i2", 50, "p2")],
           payments: [{ participantId: "p1", amount: 120 }],
           actualTotal: 120,
-          tip: 20,
+          delivery: 20,
         })
       );
-      expect(result.breakdowns.find((b) => b.participantId === "p1")!.tipShare).toBe(10);
-      expect(result.breakdowns.find((b) => b.participantId === "p2")!.tipShare).toBe(10);
+      expect(result.breakdowns.find((b) => b.participantId === "p1")!.deliveryShare).toBe(10);
+      expect(result.breakdowns.find((b) => b.participantId === "p2")!.deliveryShare).toBe(10);
     });
 
     it("discount reduces proportionally", () => {
@@ -249,20 +250,21 @@ describe("Calculation Engine", () => {
       expect(result.breakdowns.find((b) => b.participantId === "p2")!.discountShare).toBe(4);
     });
 
-    it("combined tax + tip + discount", () => {
+    it("combined tax + vat + delivery + discount", () => {
       const result = calculateSplit(
         makeInput({
           participants: [makeParticipant("p1"), makeParticipant("p2")],
           items: [makeItem("i1", 50, "p1"), makeItem("i2", 50, "p2")],
-          payments: [{ participantId: "p1", amount: 115 }],
-          actualTotal: 115,
+          payments: [{ participantId: "p1", amount: 125 }],
+          actualTotal: 125,
           tax: 10,
-          tip: 15,
+          vat: 5,
+          delivery: 20,
           discount: 10,
         })
       );
       const total = result.breakdowns.reduce((s, b) => s + b.totalOwed, 0);
-      expect(total).toBeCloseTo(115, 1);
+      expect(total).toBeCloseTo(125, 1);
     });
   });
 

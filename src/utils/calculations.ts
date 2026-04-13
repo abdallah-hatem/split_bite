@@ -35,7 +35,8 @@ export type CalcInput = {
   participants: CalcParticipant[];
   actualTotal: number;
   tax: number;
-  tip: number;
+  vat: number;
+  delivery: number;
   discount: number;
 };
 
@@ -46,7 +47,8 @@ export type ParticipantBreakdown = {
   itemsTotal: number;
   adjustedTotal: number;
   taxShare: number;
-  tipShare: number;
+  vatShare: number;
+  deliveryShare: number;
   discountShare: number;
   totalOwed: number;
   totalPaid: number;
@@ -98,7 +100,7 @@ function fixRounding(
  * Main calculation function
  */
 export function calculateSplit(input: CalcInput): CalcResult {
-  const { items, payments, participants, actualTotal, tax, tip, discount } =
+  const { items, payments, participants, actualTotal, tax, vat, delivery, discount } =
     input;
 
   // Step 1: Compute raw items sum
@@ -108,8 +110,8 @@ export function calculateSplit(input: CalcInput): CalcResult {
   );
 
   // Step 2: Compute adjustment ratio
-  // The base amount (before tax/tip, after discount) that items should map to
-  const baseTotal = actualTotal - tax - tip + discount;
+  // The base amount (before tax/vat/delivery, after discount) that items should map to
+  const baseTotal = actualTotal - tax - vat - delivery + discount;
   const adjustmentRatio = itemsSum > 0 ? baseTotal / itemsSum : 1;
 
   // Step 3: Compute per-participant item costs
@@ -136,7 +138,8 @@ export function calculateSplit(input: CalcInput): CalcResult {
         itemsTotal: round2(rawItemsTotal),
         adjustedTotal,
         taxShare: 0,
-        tipShare: 0,
+        vatShare: 0,
+        deliveryShare: 0,
         discountShare: 0,
         totalOwed: adjustedTotal,
         totalPaid: 0,
@@ -151,9 +154,10 @@ export function calculateSplit(input: CalcInput): CalcResult {
     for (const b of breakdowns) {
       const proportion = b.adjustedTotal / adjustedSum;
       b.taxShare = round2(tax * proportion);
-      b.tipShare = round2(tip * proportion);
+      b.vatShare = round2(vat * proportion);
+      b.deliveryShare = round2(delivery * proportion);
       b.discountShare = round2(discount * proportion);
-      b.totalOwed = round2(b.adjustedTotal + b.taxShare + b.tipShare - b.discountShare);
+      b.totalOwed = round2(b.adjustedTotal + b.taxShare + b.vatShare + b.deliveryShare - b.discountShare);
     }
   }
 

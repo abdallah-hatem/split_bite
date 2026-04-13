@@ -7,10 +7,9 @@ import {
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import "react-native-reanimated";
-
-import { useColorScheme } from "@/components/useColorScheme";
 import { AuthProvider, useAuth } from "@/src/providers/AuthProvider";
 import { QueryProvider } from "@/src/providers/QueryProvider";
 
@@ -52,7 +51,6 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
   const { session, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
@@ -70,8 +68,16 @@ function RootLayoutNav() {
   }, [session, isLoading, segments]);
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
+    <ThemeProvider value={DefaultTheme}>
+      <StatusBar style="dark" />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: "#FFFFFF" },
+          headerTintColor: "#111827",
+          headerTitleStyle: { color: "#111827" },
+          contentStyle: { backgroundColor: "#F9FAFB" },
+        }}
+      >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />

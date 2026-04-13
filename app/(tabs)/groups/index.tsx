@@ -7,13 +7,27 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { useGroups } from "@/src/hooks/useGroups";
 import { GroupCard } from "@/src/components/groups/GroupCard";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 export default function GroupsScreen() {
-  const { data: groups, isLoading, refetch, isRefetching } = useGroups();
+  const { data: groups, isLoading, refetch } = useGroups();
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [])
+  );
+
+  const onPullRefresh = async () => {
+    setPullRefreshing(true);
+    await refetch();
+    setPullRefreshing(false);
+  };
 
   if (isLoading) {
     return (
@@ -38,7 +52,7 @@ export default function GroupsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+            <RefreshControl refreshing={pullRefreshing} onRefresh={onPullRefresh} />
           }
           renderItem={({ item }) => <GroupCard group={item} />}
         />

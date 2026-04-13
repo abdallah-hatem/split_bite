@@ -10,7 +10,8 @@ export type Order = {
   created_by: string;
   actual_total: number | null;
   tax: number;
-  tip: number;
+  vat: number;
+  delivery: number;
   discount: number;
   created_at: string;
   finalized_at: string | null;
@@ -103,18 +104,28 @@ export function useOrderParticipants(orderId: string) {
   });
 }
 
+export type ItemWithShares = Item & {
+  item_shares: {
+    participant_id: string;
+    share_fraction: number;
+  }[];
+  added_by: OrderParticipant | null;
+};
+
 export function useOrderItems(orderId: string) {
   return useQuery({
     queryKey: orderKeys.items(orderId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from("items")
-        .select("*")
+        .select(
+          "*, item_shares(participant_id, share_fraction), added_by:added_by_participant_id(id, user_id, guest_id, profiles:user_id(display_name), guests:guest_id(name))"
+        )
         .eq("order_id", orderId)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      return data as Item[];
+      return data as unknown as ItemWithShares[];
     },
     enabled: !!orderId,
   });

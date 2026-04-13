@@ -8,16 +8,22 @@ import {
   RefreshControl,
   Alert,
 } from "react-native";
-import { useLocalSearchParams, Link, Stack } from "expo-router";
+import { useLocalSearchParams, Link, Stack, router } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { useGroup, useGroupMembers } from "@/src/hooks/useGroup";
 import { useOrders } from "@/src/hooks/useOrders";
+import { useAuth } from "@/src/providers/AuthProvider";
+import { supabase } from "@/src/lib/supabase";
+import { useQueryClient } from "@tanstack/react-query";
+import { groupKeys } from "@/src/hooks/useGroups";
 import { MemberRow } from "@/src/components/groups/MemberRow";
 import { OrderCard } from "@/src/components/orders/OrderCard";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 export default function GroupDetail() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data: group, isLoading: groupLoading, refetch: refetchGroup } = useGroup(groupId);
   const { data: members, refetch: refetchMembers } = useGroupMembers(groupId);
   const { data: orders, refetch: refetchOrders, isRefetching } = useOrders(groupId);
@@ -26,6 +32,37 @@ export default function GroupDetail() {
     refetchGroup();
     refetchMembers();
     refetchOrders();
+  };
+
+  const isOwner = group?.created_by === user?.id;
+
+  const handleLeaveGroup = () => {
+    Alert.alert(
+      "Leave Group",
+      "Are you sure you want to leave this group?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from("group_members")
+                .delete()
+                .eq("group_id", groupId)
+                .eq("user_id", user!.id);
+              if (error) throw error;
+              await queryClient.invalidateQueries({ queryKey: groupKeys.all });
+              await queryClient.refetchQueries({ queryKey: groupKeys.all });
+              router.replace("/(tabs)/groups");
+            } catch (error: any) {
+              Alert.alert("Error", error.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const copyInviteCode = async () => {
@@ -67,6 +104,12 @@ export default function GroupDetail() {
               <Text style={styles.inviteCode}>{group.invite_code}</Text>
               <Text style={styles.copyHint}>Tap to copy</Text>
             </TouchableOpacity>
+
+            {!isOwner && (
+              <TouchableOpacity style={styles.leaveButton} onPress={handleLeaveGroup}>
+                <Text style={styles.leaveButtonText}>Leave Group</Text>
+              </TouchableOpacity>
+            )}
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
@@ -111,6 +154,8 @@ const styles = StyleSheet.create({
   groupName: { fontSize: FontSize.xxl, fontWeight: "800", color: Colors.text },
   groupDesc: { fontSize: FontSize.md, color: Colors.textSecondary, marginTop: Spacing.xs },
   inviteRow: { backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border, alignItems: "center", marginBottom: Spacing.lg },
+  leaveButton: { backgroundColor: Colors.errorLight, borderRadius: BorderRadius.md, padding: Spacing.sm, alignItems: "center", marginBottom: Spacing.lg },
+  leaveButtonText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: "600" },
   inviteLabel: { fontSize: FontSize.xs, color: Colors.textTertiary, letterSpacing: 1 },
   inviteCode: { fontSize: FontSize.xl, fontWeight: "700", color: Colors.primary, letterSpacing: 3, marginTop: Spacing.xs },
   copyHint: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: Spacing.xs },

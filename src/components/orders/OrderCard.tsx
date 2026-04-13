@@ -19,8 +19,13 @@ const statusColor = (status: string) => {
 };
 
 export function OrderCard({ order, groupId }: Props) {
+  const isFinalized = order.status === "finalized" || order.status === "settled";
+  const href = isFinalized
+    ? `/(tabs)/groups/${groupId}/orders/${order.id}/summary`
+    : `/(tabs)/groups/${groupId}/orders/${order.id}`;
+
   return (
-    <Link href={`/(tabs)/groups/${groupId}/orders/${order.id}` as any} asChild>
+    <Link href={href as any} asChild>
       <TouchableOpacity style={styles.card}>
         <View style={styles.top}>
           <Text style={styles.title}>{order.title}</Text>

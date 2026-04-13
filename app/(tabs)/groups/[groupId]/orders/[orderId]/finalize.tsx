@@ -28,6 +28,8 @@ import {
 import { formatCurrency } from "@/src/utils/currency";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 export default function FinalizeScreen() {
   const { groupId, orderId } = useLocalSearchParams<{
     groupId: string;
@@ -43,7 +45,8 @@ export default function FinalizeScreen() {
     order?.actual_total?.toString() ?? ""
   );
   const [tax, setTax] = useState(order?.tax?.toString() ?? "0");
-  const [tip, setTip] = useState(order?.tip?.toString() ?? "0");
+  const [vat, setVat] = useState(order?.vat?.toString() ?? "0");
+  const [delivery, setDelivery] = useState(order?.delivery?.toString() ?? "0");
   const [discount, setDiscount] = useState(order?.discount?.toString() ?? "0");
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
   const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
@@ -71,21 +74,41 @@ export default function FinalizeScreen() {
 
   const totalNum = parseFloat(actualTotal) || 0;
   const taxNum = parseFloat(tax) || 0;
-  const tipNum = parseFloat(tip) || 0;
+  const vatNum = parseFloat(vat) || 0;
+  const deliveryNum = parseFloat(delivery) || 0;
   const discountNum = parseFloat(discount) || 0;
 
-  const diff = totalNum - itemsSum;
+
+  const paymentsTotal = Object.values(payerAmounts).reduce(
+    (sum, amt) => sum + (parseFloat(amt) || 0),
+    0
+  );
+  const hasPayments = paymentsTotal > 0;
+  const paymentsDiff = hasPayments ? round2(paymentsTotal - totalNum) : 0;
 
   // Preview calculation
   const preview = useMemo(() => {
     if (!participants?.length || !totalNum) return null;
 
-    const calcItems: CalcItem[] = effectiveItems.map((item) => ({
-      id: item.id,
-      price: item.price,
-      quantity: item.quantity,
-      shares: [{ participantId: item.added_by_participant_id, fraction: 1 }],
-    }));
+    const calcItems: CalcItem[] = effectiveItems.map((item) => {
+      // Use actual item_shares from DB
+      const origItem = items?.find((i) => i.id === item.id) as any;
+      const dbShares = origItem?.item_shares ?? [];
+
+      const shares = dbShares.length > 0
+        ? dbShares.map((s: any) => ({
+            participantId: s.participant_id,
+            fraction: s.share_fraction,
+          }))
+        : [{ participantId: item.added_by_participant_id, fraction: 1 }];
+
+      return {
+        id: item.id,
+        price: item.price,
+        quantity: item.quantity,
+        shares,
+      };
+    });
 
     const calcParticipants: CalcParticipant[] = (participants ?? []).map(
       (p) => ({
@@ -123,7 +146,8 @@ export default function FinalizeScreen() {
         participants: calcParticipants,
         actualTotal: totalNum,
         tax: taxNum,
-        tip: tipNum,
+        vat: vatNum,
+        delivery: deliveryNum,
         discount: discountNum,
       });
     } catch {
@@ -135,7 +159,8 @@ export default function FinalizeScreen() {
     payerAmounts,
     totalNum,
     taxNum,
-    tipNum,
+    vatNum,
+    deliveryNum,
     discountNum,
     user,
   ]);
@@ -147,6 +172,14 @@ export default function FinalizeScreen() {
     }
     if (!totalNum) {
       Alert.alert("Missing Total", "Please enter the actual bill total.");
+      return;
+    }
+
+    if (hasPayments && Math.abs(paymentsDiff) > 0.01) {
+      Alert.alert(
+        "Payments Don't Match",
+        `Payments total (${formatCurrency(paymentsTotal)}) doesn't match the bill total (${formatCurrency(totalNum)}). Difference: ${formatCurrency(paymentsDiff)}`
+      );
       return;
     }
 
@@ -174,7 +207,8 @@ export default function FinalizeScreen() {
               .update({
                 actual_total: totalNum,
                 tax: taxNum,
-                tip: tipNum,
+                vat: vatNum,
+                delivery: deliveryNum,
                 discount: discountNum,
               })
               .eq("id", orderId);
@@ -261,13 +295,35 @@ export default function FinalizeScreen() {
 
         {/* Item Prices */}
         <Text style={styles.sectionTitle}>Item Prices</Text>
-        {effectiveItems.map((item) => (
+        {effectiveItems.map((item) => {
+          // Resolve who this item belongs to from the original items data
+          const origItem = items?.find((i) => i.id === item.id) as any;
+          const itemShares = origItem?.item_shares ?? [];
+          const shareNames = itemShares
+            .map((s: any) => {
+              const p = participants?.find((p: any) => p.id === s.participant_id);
+              return p?.profiles?.display_name ?? p?.guests?.name ?? null;
+            })
+            .filter(Boolean);
+
+          const addedByName =
+            origItem?.added_by?.profiles?.display_name ??
+            origItem?.added_by?.guests?.name ??
+            null;
+
+          const isSharedItem = shareNames.length > 1;
+
+          return (
           <View key={item.id} style={styles.itemRow}>
             <View style={styles.itemInfo}>
               <Text style={styles.itemName}>{item.name}</Text>
-              {item.is_shared && (
-                <Text style={styles.sharedTag}>Shared</Text>
-              )}
+              {isSharedItem ? (
+                <Text style={styles.sharedTag}>
+                  Split: {shareNames.join(", ")}
+                </Text>
+              ) : addedByName ? (
+                <Text style={styles.addedByTag}>{addedByName}</Text>
+              ) : null}
             </View>
             <TextInput
               style={[
@@ -287,7 +343,8 @@ export default function FinalizeScreen() {
               placeholderTextColor={Colors.textTertiary}
             />
           </View>
-        ))}
+          );
+        })}
 
         <View style={styles.sumRow}>
           <Text style={styles.sumLabel}>Items Sum</Text>
@@ -309,24 +366,6 @@ export default function FinalizeScreen() {
           placeholderTextColor={Colors.textTertiary}
         />
 
-        {totalNum > 0 && Math.abs(diff) > 0.01 && (
-          <View
-            style={[
-              styles.diffBanner,
-              diff > 0 ? styles.diffPositive : styles.diffNegative,
-            ]}
-          >
-            <Text style={styles.diffText}>
-              {diff > 0
-                ? `Receipt is ${formatCurrency(diff)} more than items`
-                : `Items are ${formatCurrency(Math.abs(diff))} more than receipt`}
-            </Text>
-            <Text style={styles.diffSubtext}>
-              Difference will be distributed proportionally
-            </Text>
-          </View>
-        )}
-
         <View style={styles.row}>
           <View style={styles.halfInput}>
             <Text style={styles.label}>Tax</Text>
@@ -338,23 +377,36 @@ export default function FinalizeScreen() {
             />
           </View>
           <View style={styles.halfInput}>
-            <Text style={styles.label}>Tip</Text>
+            <Text style={styles.label}>VAT</Text>
             <TextInput
               style={styles.input}
-              value={tip}
-              onChangeText={setTip}
+              value={vat}
+              onChangeText={setVat}
               keyboardType="decimal-pad"
             />
           </View>
         </View>
 
-        <Text style={styles.label}>Discount</Text>
-        <TextInput
-          style={styles.input}
-          value={discount}
-          onChangeText={setDiscount}
-          keyboardType="decimal-pad"
-        />
+        <View style={styles.row}>
+          <View style={styles.halfInput}>
+            <Text style={styles.label}>Delivery</Text>
+            <TextInput
+              style={styles.input}
+              value={delivery}
+              onChangeText={setDelivery}
+              keyboardType="decimal-pad"
+            />
+          </View>
+          <View style={styles.halfInput}>
+            <Text style={styles.label}>Discount</Text>
+            <TextInput
+              style={styles.input}
+              value={discount}
+              onChangeText={setDiscount}
+              keyboardType="decimal-pad"
+            />
+          </View>
+        </View>
 
         {/* Payments */}
         <Text style={[styles.sectionTitle, { marginTop: Spacing.lg }]}>
@@ -382,6 +434,37 @@ export default function FinalizeScreen() {
             </View>
           );
         })}
+
+        {/* Payments summary */}
+        {hasPayments && (
+          <View style={[
+            styles.paymentsSummary,
+            Math.abs(paymentsDiff) > 0.01 ? styles.paymentsMismatch : styles.paymentsMatch,
+          ]}>
+            <View style={styles.paymentsSummaryRow}>
+              <Text style={styles.paymentsSummaryLabel}>Payments Total</Text>
+              <Text style={styles.paymentsSummaryValue}>
+                {formatCurrency(paymentsTotal)}
+              </Text>
+            </View>
+            <View style={styles.paymentsSummaryRow}>
+              <Text style={styles.paymentsSummaryLabel}>Bill Total</Text>
+              <Text style={styles.paymentsSummaryValue}>
+                {formatCurrency(totalNum)}
+              </Text>
+            </View>
+            {Math.abs(paymentsDiff) > 0.01 && (
+              <Text style={styles.paymentsDiffText}>
+                {paymentsDiff > 0
+                  ? `Overpaid by ${formatCurrency(paymentsDiff)}`
+                  : `Short by ${formatCurrency(Math.abs(paymentsDiff))}`}
+              </Text>
+            )}
+            {Math.abs(paymentsDiff) <= 0.01 && (
+              <Text style={styles.paymentsOkText}>Payments match the bill</Text>
+            )}
+          </View>
+        )}
 
         {/* Preview */}
         {preview && (
@@ -454,19 +537,23 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1 },
   itemName: { fontSize: FontSize.md, color: Colors.text },
   sharedTag: { fontSize: FontSize.xs, color: Colors.primary },
+  addedByTag: { fontSize: FontSize.xs, color: Colors.textTertiary },
   priceInput: { width: 100, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.sm, padding: Spacing.sm, fontSize: FontSize.md, color: Colors.text, textAlign: "right" },
   priceInputMissing: { borderColor: Colors.error, backgroundColor: Colors.errorLight },
   sumRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: Spacing.sm, marginTop: Spacing.xs },
   sumLabel: { fontSize: FontSize.md, fontWeight: "600", color: Colors.text },
   sumValue: { fontSize: FontSize.md, fontWeight: "700", color: Colors.text },
-  diffBanner: { padding: Spacing.sm, borderRadius: BorderRadius.sm, marginTop: Spacing.sm },
-  diffPositive: { backgroundColor: Colors.warningLight },
-  diffNegative: { backgroundColor: Colors.errorLight },
-  diffText: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.text },
-  diffSubtext: { fontSize: FontSize.xs, color: Colors.textSecondary, marginTop: 2 },
   payerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.sm },
   payerName: { fontSize: FontSize.md, color: Colors.text, flex: 1 },
   payerInput: { width: 100, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.sm, padding: Spacing.sm, fontSize: FontSize.md, color: Colors.text, textAlign: "right" },
+  paymentsSummary: { padding: Spacing.sm, borderRadius: BorderRadius.sm, marginTop: Spacing.sm },
+  paymentsMismatch: { backgroundColor: Colors.errorLight },
+  paymentsMatch: { backgroundColor: Colors.successLight },
+  paymentsSummaryRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
+  paymentsSummaryLabel: { fontSize: FontSize.sm, color: Colors.text },
+  paymentsSummaryValue: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.text },
+  paymentsDiffText: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.error, marginTop: Spacing.xs },
+  paymentsOkText: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.success, marginTop: Spacing.xs },
   previewSection: { marginTop: Spacing.lg, backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
   previewRow: { paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
   previewName: { fontSize: FontSize.md, fontWeight: "600", color: Colors.text },

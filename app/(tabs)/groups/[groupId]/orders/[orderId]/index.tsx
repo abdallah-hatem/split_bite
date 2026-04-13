@@ -42,8 +42,23 @@ function AddItemModal({
 }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [isShared, setIsShared] = useState(false);
+  const [splitMode, setSplitMode] = useState<"mine" | "some" | "all">("mine");
+  const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(
+    new Set()
+  );
   const addItem = useAddItem();
+
+  const toggleParticipant = (pid: string) => {
+    setSelectedParticipants((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) {
+        next.delete(pid);
+      } else {
+        next.add(pid);
+      }
+      return next;
+    });
+  };
 
   const handleAdd = async () => {
     if (!name.trim()) {
@@ -51,10 +66,25 @@ function AddItemModal({
       return;
     }
 
+    if (splitMode === "some" && selectedParticipants.size === 0) {
+      Alert.alert("Error", "Please select at least one person to split with");
+      return;
+    }
+
     try {
-      const sharedWith = isShared
-        ? participants.map((p) => p.id)
-        : undefined;
+      let sharedWith: string[] | undefined;
+      let isShared = false;
+
+      if (splitMode === "all") {
+        isShared = true;
+        sharedWith = participants.map((p) => p.id);
+      } else if (splitMode === "some") {
+        isShared = true;
+        // Include self + selected
+        sharedWith = [participantId, ...Array.from(selectedParticipants)];
+        // Deduplicate
+        sharedWith = [...new Set(sharedWith)];
+      }
 
       await addItem.mutateAsync({
         orderId,
@@ -67,7 +97,8 @@ function AddItemModal({
       });
       setName("");
       setPrice("");
-      setIsShared(false);
+      setSplitMode("mine");
+      setSelectedParticipants(new Set());
       onClose();
     } catch (error: any) {
       Alert.alert("Error", error.message);
@@ -121,20 +152,69 @@ function AddItemModal({
             keyboardType="decimal-pad"
           />
 
-          <TouchableOpacity
-            style={modalStyles.toggle}
-            onPress={() => setIsShared(!isShared)}
-          >
-            <View
-              style={[
-                modalStyles.checkbox,
-                isShared && modalStyles.checkboxChecked,
-              ]}
-            />
-            <Text style={modalStyles.toggleText}>
-              Shared item (split among everyone)
-            </Text>
-          </TouchableOpacity>
+          <Text style={modalStyles.label}>Who is this for?</Text>
+          <View style={modalStyles.splitOptions}>
+            {(
+              [
+                { key: "mine", label: "Just me" },
+                { key: "some", label: "Split with..." },
+                { key: "all", label: "Everyone" },
+              ] as const
+            ).map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[
+                  modalStyles.splitOption,
+                  splitMode === opt.key && modalStyles.splitOptionActive,
+                ]}
+                onPress={() => setSplitMode(opt.key)}
+              >
+                <Text
+                  style={[
+                    modalStyles.splitOptionText,
+                    splitMode === opt.key &&
+                      modalStyles.splitOptionTextActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {splitMode === "some" && (
+            <View style={modalStyles.participantList}>
+              {participants
+                .filter((p) => p.id !== participantId)
+                .map((p) => {
+                  const pName =
+                    p.profiles?.display_name ??
+                    p.guests?.name ??
+                    "Unknown";
+                  const selected = selectedParticipants.has(p.id);
+                  return (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={[
+                        modalStyles.participantRow,
+                        selected && modalStyles.participantRowSelected,
+                      ]}
+                      onPress={() => toggleParticipant(p.id)}
+                    >
+                      <View
+                        style={[
+                          modalStyles.checkbox,
+                          selected && modalStyles.checkboxChecked,
+                        ]}
+                      />
+                      <Text style={modalStyles.participantName}>
+                        {pName}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -396,21 +476,43 @@ export default function OrderDetail() {
             )}
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.itemRow}>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              {item.is_shared && (
-                <Text style={styles.sharedLabel}>Shared</Text>
-              )}
+        renderItem={({ item }) => {
+          const addedByName =
+            (item.added_by as any)?.profiles?.display_name ??
+            (item.added_by as any)?.guests?.name ??
+            null;
+
+          const shareNames = (item.item_shares ?? [])
+            .map((s) => {
+              const p = participants?.find(
+                (p) => p.id === s.participant_id
+              );
+              return p?.profiles?.display_name ?? p?.guests?.name ?? null;
+            })
+            .filter(Boolean);
+
+          const isSharedItem = shareNames.length > 1;
+
+          return (
+            <View style={styles.itemRow}>
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>{item.name}</Text>
+                {isSharedItem ? (
+                  <Text style={styles.sharedLabel}>
+                    Split: {shareNames.join(", ")}
+                  </Text>
+                ) : addedByName ? (
+                  <Text style={styles.addedByLabel}>{addedByName}</Text>
+                ) : null}
+              </View>
+              <Text style={styles.itemPrice}>
+                {item.price != null
+                  ? `${item.price.toFixed(2)}`
+                  : "No price"}
+              </Text>
             </View>
-            <Text style={styles.itemPrice}>
-              {item.price != null
-                ? `${item.price.toFixed(2)}`
-                : "No price"}
-            </Text>
-          </View>
-        )}
+          );
+        }}
         ListFooterComponent={
           <View style={styles.footer}>
             {(items?.length ?? 0) > 0 && (
@@ -538,10 +640,17 @@ const modalStyles = StyleSheet.create({
   label: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.text, marginTop: Spacing.md, marginBottom: Spacing.xs },
   subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
   input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.md, fontSize: FontSize.md, color: Colors.text },
-  toggle: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginTop: Spacing.lg },
+  splitOptions: { flexDirection: "row", gap: Spacing.xs, marginTop: Spacing.xs },
+  splitOption: { flex: 1, paddingVertical: Spacing.sm, alignItems: "center", borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
+  splitOptionActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + "15" },
+  splitOptionText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: "500" },
+  splitOptionTextActive: { color: Colors.primary, fontWeight: "600" },
+  participantList: { marginTop: Spacing.sm, gap: Spacing.xs },
+  participantRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, padding: Spacing.sm, borderRadius: BorderRadius.sm, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+  participantRowSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + "10" },
+  participantName: { fontSize: FontSize.md, color: Colors.text },
   checkbox: { width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: Colors.border },
   checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  toggleText: { fontSize: FontSize.sm, color: Colors.text },
 });
 
 const styles = StyleSheet.create({
@@ -568,6 +677,7 @@ const styles = StyleSheet.create({
   itemInfo: { flex: 1, gap: 2 },
   itemName: { fontSize: FontSize.md, color: Colors.text, fontWeight: "500" },
   sharedLabel: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: "500" },
+  addedByLabel: { fontSize: FontSize.xs, color: Colors.textTertiary },
   itemPrice: { fontSize: FontSize.md, fontWeight: "600", color: Colors.text },
   footer: { marginTop: Spacing.md, gap: Spacing.sm },
   totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },

@@ -12,6 +12,12 @@ returns boolean as $$
   );
 $$ language sql security definer stable;
 
+-- Lookup group by invite code (bypasses RLS for join flow)
+create or replace function public.get_group_id_by_invite_code(code text)
+returns uuid as $$
+  select id from public.groups where invite_code = code limit 1;
+$$ language sql security definer stable;
+
 -- Enable RLS on all tables
 alter table public.profiles enable row level security;
 alter table public.groups enable row level security;
@@ -43,10 +49,13 @@ create policy "profiles_update" on public.profiles
 -- GROUPS
 -- ============================================
 -- Members can read their groups
--- Members and creators can read full group data; anyone can look up by invite_code (for joining)
+-- Members and creators can read their groups
 create policy "groups_select" on public.groups
   for select to authenticated
-  using (true);
+  using (
+    created_by = auth.uid()
+    or public.is_group_member(id)
+  );
 
 -- Any authenticated user can create a group
 create policy "groups_insert" on public.groups
