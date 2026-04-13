@@ -288,6 +288,7 @@ export default function FinalizeScreen() {
 
             notifyOrderFinalized(
               groupId,
+              orderId,
               order?.title ?? "Order",
               profile?.display_name ?? "Someone",
               user!.id

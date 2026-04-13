@@ -80,6 +80,7 @@ export async function notifyOrderCreated(
  */
 export async function notifyOrderFinalized(
   groupId: string,
+  orderId: string,
   orderTitle: string,
   finalizerName: string,
   finalizerId: string
@@ -95,7 +96,7 @@ export async function notifyOrderFinalized(
   await sendPushNotifications(userIds, {
     title: "Order Finalized",
     body: `${finalizerName} finalized "${orderTitle}". Check your split!`,
-    data: { type: "order_finalized", groupId },
+    data: { type: "order_finalized", groupId, orderId },
   });
 }
 

@@ -55,10 +55,20 @@ function handleNotificationTap(data?: Record<string, unknown>) {
   const type = data?.type;
   const groupId = data?.groupId;
 
+  const orderId = data?.orderId;
+
   switch (type) {
     case "order_created":
-    case "order_finalized":
       if (groupId) {
+        router.push(`/(tabs)/groups/${groupId}` as any);
+      }
+      break;
+    case "order_finalized":
+      if (groupId && orderId) {
+        router.push(
+          `/(tabs)/groups/${groupId}/orders/${orderId}/summary` as any
+        );
+      } else if (groupId) {
         router.push(`/(tabs)/groups/${groupId}` as any);
       }
       break;
