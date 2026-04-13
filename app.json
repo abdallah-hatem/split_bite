@@ -2,6 +2,7 @@
   "expo": {
     "name": "split_bite",
     "slug": "split_bite",
+    "owner": "leo_pepsi_2",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -34,6 +35,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3694f975-6340-47f3-80fa-cb6b4b105221"
+      }
     }
   }
 }

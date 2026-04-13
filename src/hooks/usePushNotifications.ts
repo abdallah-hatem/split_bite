@@ -55,14 +55,18 @@ export function usePushNotifications() {
   useEffect(() => {
     if (!user) return;
 
-    registerForPushNotifications().then(async (token) => {
-      if (!token) return;
+    registerForPushNotifications()
+      .then(async (token) => {
+        if (!token) return;
 
-      await supabase.from("push_tokens").upsert(
-        { user_id: user.id, expo_push_token: token },
-        { onConflict: "user_id,expo_push_token" }
-      );
-    });
+        await supabase.from("push_tokens").upsert(
+          { user_id: user.id, expo_push_token: token },
+          { onConflict: "user_id,expo_push_token" }
+        );
+      })
+      .catch((err) => {
+        console.log("Push notification setup skipped:", err.message);
+      });
 
     const notificationSub = Notifications.addNotificationReceivedListener(
       () => {}
