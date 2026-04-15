@@ -16,7 +16,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.leopepsi2.splitbite"
+      "bundleIdentifier": "com.leopepsi2.splitbite",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "3"
     },
     "android": {
       "adaptiveIcon": {
