@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#3730A3"/>
+    </linearGradient>
+    <linearGradient id="accent2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818CF8"/>
+      <stop offset="100%" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="bite2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#4F46E5"/>
+
+  <!-- Main circle (plate) - left half -->
+  <path d="M 512 180 A 240 240 0 0 0 512 660" fill="#F0F0F5"/>
+
+  <!-- Main circle - right half -->
+  <path d="M 526 180 A 240 240 0 0 1 526 660" fill="#E0E0EA"/>
+
+  <!-- Zigzag split -->
+  <path d="M 512 180 L 536 236 L 506 292 L 536 348 L 506 404 L 536 460 L 506 516 L 536 572 L 506 628 L 526 660"
+        fill="none" stroke="#4F46E5" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Bite mark -->
+  <circle cx="646" cy="268" r="76" fill="#4F46E5"/>
+  <circle cx="642" cy="272" r="72" fill="none" stroke="#5B52ED" stroke-width="2.5"/>
+
+  <!-- Crumbs -->
+  <circle cx="726" cy="218" r="10" fill="url(#bite2)"/>
+  <circle cx="700" cy="186" r="7" fill="#ECBA3A"/>
+  <circle cx="736" cy="260" r="5" fill="#D4A432"/>
+
+  <!-- Fork -->
+  <g transform="translate(382, 328)" fill="#818CF8">
+    <rect x="0" y="0" width="6" height="52" rx="3"/>
+    <rect x="18" y="0" width="6" height="52" rx="3"/>
+    <rect x="36" y="0" width="6" height="52" rx="3"/>
+    <rect x="-3" y="46" width="48" height="10" rx="5"/>
+    <rect x="14" y="52" width="14" height="64" rx="7"/>
+  </g>
+
+  <!-- Knife -->
+  <g transform="translate(580, 328)" fill="#818CF8">
+    <path d="M 6 0 Q 24 0 24 24 L 24 56 L 6 56 Z" />
+    <rect x="9" y="52" width="13" height="64" rx="6.5"/>
+  </g>
+
+  <!-- App name -->
+  <text x="512" y="760" text-anchor="middle" font-family="system-ui, -apple-system, 'Helvetica Neue', sans-serif" font-size="72" font-weight="800" fill="#FFFFFF" letter-spacing="-2">
+    SplitBite
+  </text>
+
+  <!-- Tagline -->
+  <text x="512" y="810" text-anchor="middle" font-family="system-ui, -apple-system, 'Helvetica Neue', sans-serif" font-size="24" font-weight="400" fill="#A5B4FC" letter-spacing="4">
+    SPLIT BILLS, NOT FRIENDSHIPS
+  </text>
+</svg>

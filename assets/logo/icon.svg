@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#3730A3"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818CF8"/>
+      <stop offset="100%" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="bite" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+
+  <!-- Subtle inner glow -->
+  <rect x="40" y="40" width="944" height="944" rx="192" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+
+  <!-- Main circle (plate/coin) - left half -->
+  <path d="M 512 212 A 300 300 0 0 0 512 812" fill="rgba(255,255,255,0.95)"/>
+
+  <!-- Main circle - right half, slightly offset for split effect -->
+  <path d="M 530 212 A 300 300 0 0 1 530 812" fill="rgba(255,255,255,0.85)"/>
+
+  <!-- Zigzag split line down the middle -->
+  <path d="M 512 212 L 540 280 L 504 348 L 540 416 L 504 484 L 540 552 L 504 620 L 540 688 L 504 756 L 530 812"
+        fill="none" stroke="url(#bg)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Bite mark (top right of circle) -->
+  <circle cx="680" cy="320" r="95" fill="url(#bg)"/>
+
+  <!-- Bite mark inner shadow -->
+  <circle cx="675" cy="325" r="90" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
+
+  <!-- Small decorative dots around bite (crumbs) -->
+  <circle cx="780" cy="260" r="12" fill="url(#bite)"/>
+  <circle cx="750" cy="220" r="8" fill="url(#bite)" opacity="0.8"/>
+  <circle cx="790" cy="310" r="6" fill="url(#bite)" opacity="0.6"/>
+
+  <!-- Fork tines on left side -->
+  <g transform="translate(350, 380)" fill="url(#accent)">
+    <rect x="0" y="0" width="8" height="65" rx="4"/>
+    <rect x="22" y="0" width="8" height="65" rx="4"/>
+    <rect x="44" y="0" width="8" height="65" rx="4"/>
+    <rect x="-4" y="58" width="60" height="12" rx="6"/>
+    <rect x="18" y="65" width="16" height="80" rx="8"/>
+  </g>
+
+  <!-- Knife on right side -->
+  <g transform="translate(600, 380)" fill="url(#accent)">
+    <path d="M 8 0 Q 30 0 30 30 L 30 70 L 8 70 Z" />
+    <rect x="12" y="65" width="16" height="80" rx="8"/>
+  </g>
+</svg>
