@@ -118,6 +118,34 @@ export default function GroupDetail() {
     }
   };
 
+  const handleDeleteGroup = () => {
+    Alert.alert(
+      "Delete Group",
+      "This will permanently delete this group, all orders, and all balance history. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from("groups")
+                .delete()
+                .eq("id", groupId);
+              if (error) throw error;
+              await queryClient.invalidateQueries({ queryKey: groupKeys.all });
+              await queryClient.refetchQueries({ queryKey: groupKeys.all });
+              router.replace("/(tabs)/groups");
+            } catch (error: any) {
+              Alert.alert("Error", error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (groupLoading || !group) {
     return (
       <View style={styles.centered}>
@@ -165,6 +193,12 @@ export default function GroupDetail() {
             {!isOwner && (
               <TouchableOpacity style={styles.leaveButton} onPress={handleLeaveGroup}>
                 <Text style={styles.leaveButtonText}>Leave Group</Text>
+              </TouchableOpacity>
+            )}
+
+            {isOwner && (
+              <TouchableOpacity style={styles.deleteGroupButton} onPress={handleDeleteGroup}>
+                <Text style={styles.deleteGroupButtonText}>Delete Group</Text>
               </TouchableOpacity>
             )}
 
@@ -231,6 +265,8 @@ const styles = StyleSheet.create({
   balancesButtonText: { color: "#FFFFFF", fontSize: FontSize.sm, fontWeight: "600" },
   leaveButton: { backgroundColor: Colors.errorLight, borderRadius: BorderRadius.md, padding: Spacing.sm, alignItems: "center", marginBottom: Spacing.lg },
   leaveButtonText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: "600" },
+  deleteGroupButton: { backgroundColor: Colors.error, borderRadius: BorderRadius.md, padding: Spacing.sm, alignItems: "center", marginBottom: Spacing.lg },
+  deleteGroupButtonText: { color: "#FFFFFF", fontSize: FontSize.sm, fontWeight: "600" },
   inviteLabel: { fontSize: FontSize.xs, color: Colors.textTertiary, letterSpacing: 1 },
   inviteCode: { fontSize: FontSize.xl, fontWeight: "700", color: Colors.primary, letterSpacing: 3, marginTop: Spacing.xs },
   copyHint: { fontSize: FontSize.xs, color: Colors.textTertiary, marginTop: Spacing.xs },

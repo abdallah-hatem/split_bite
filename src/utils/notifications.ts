@@ -109,8 +109,8 @@ export async function notifySettlement(
   amount: number
 ) {
   await sendPushNotifications([toUserId], {
-    title: "Settlement Received",
-    body: `${fromName} settled ${amount.toFixed(2)} with you`,
-    data: { type: "settlement" },
+    title: "Settlement Request",
+    body: `${fromName} says they paid you ${amount.toFixed(2)}. Please confirm.`,
+    data: { type: "settlement_request" },
   });
 }

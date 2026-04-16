@@ -62,6 +62,11 @@ create policy "groups_insert" on public.groups
   for insert to authenticated
   with check (created_by = auth.uid());
 
+-- Creator can delete group
+create policy "groups_delete" on public.groups
+  for delete to authenticated
+  using (created_by = auth.uid());
+
 -- Only group admins can update
 create policy "groups_update" on public.groups
   for update to authenticated

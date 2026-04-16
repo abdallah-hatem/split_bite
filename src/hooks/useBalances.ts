@@ -141,20 +141,17 @@ export function useSettleUp() {
       toUserId: string;
       amount: number;
     }) => {
-      // Settlement reverses the debt: if I owe them, the settlement
-      // records them as owing me (cancels out the original debt)
-      const { error } = await supabase.from("ledger_entries").insert({
+      // Create pending settlement (needs beneficiary confirmation)
+      const { error } = await supabase.from("pending_settlements").insert({
         group_id: groupId,
-        from_user_id: toUserId,
-        to_user_id: user!.id,
+        from_user_id: user!.id,
+        to_user_id: toUserId,
         amount,
-        type: "settlement",
-        description: "Manual settlement",
       });
 
       if (error) throw error;
 
-      // Send notification
+      // Notify beneficiary to confirm
       const { data: profile } = await supabase
         .from("profiles")
         .select("display_name")
@@ -170,6 +167,80 @@ export function useSettleUp() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: balanceKeys.group(variables.groupId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["pending_settlements"],
+      });
+    },
+  });
+}
+
+export function usePendingSettlements() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ["pending_settlements"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pending_settlements")
+        .select("*, from_profile:from_user_id(display_name), to_profile:to_user_id(display_name), group:group_id(name)")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+}
+
+export function useConfirmSettlement() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      settlementId,
+      groupId,
+      fromUserId,
+      amount,
+      action,
+    }: {
+      settlementId: string;
+      groupId: string;
+      fromUserId: string;
+      amount: number;
+      action: "confirmed" | "rejected";
+    }) => {
+      // Update pending settlement status
+      const { error: updateError } = await supabase
+        .from("pending_settlements")
+        .update({ status: action, resolved_at: new Date().toISOString() })
+        .eq("id", settlementId);
+
+      if (updateError) throw updateError;
+
+      // If confirmed, create the actual ledger entry
+      if (action === "confirmed") {
+        const { error: ledgerError } = await supabase
+          .from("ledger_entries")
+          .insert({
+            group_id: groupId,
+            from_user_id: fromUserId,
+            to_user_id: user!.id,
+            amount,
+            type: "settlement",
+            description: "Confirmed settlement",
+          });
+
+        if (ledgerError) throw ledgerError;
+      }
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: balanceKeys.group(variables.groupId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["pending_settlements"],
       });
     },
   });

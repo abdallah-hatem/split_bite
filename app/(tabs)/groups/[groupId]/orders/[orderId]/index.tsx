@@ -33,15 +33,18 @@ function AddItemModal({
   orderId,
   participantId,
   participants,
+  isOwner,
 }: {
   visible: boolean;
   onClose: () => void;
   orderId: string;
   participantId: string;
   participants: any[];
+  isOwner: boolean;
 }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [forParticipantId, setForParticipantId] = useState(participantId);
   const [splitMode, setSplitMode] = useState<"mine" | "some" | "all">("mine");
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(
     new Set()
@@ -75,14 +78,14 @@ function AddItemModal({
       let sharedWith: string[] | undefined;
       let isShared = false;
 
+      const ownerId = forParticipantId || participantId;
+
       if (splitMode === "all") {
         isShared = true;
         sharedWith = participants.map((p) => p.id);
       } else if (splitMode === "some") {
         isShared = true;
-        // Include self + selected
-        sharedWith = [participantId, ...Array.from(selectedParticipants)];
-        // Deduplicate
+        sharedWith = [ownerId, ...Array.from(selectedParticipants)];
         sharedWith = [...new Set(sharedWith)];
       }
 
@@ -92,11 +95,12 @@ function AddItemModal({
         price: price ? parseFloat(price) : null,
         quantity: 1,
         isShared,
-        participantId,
+        participantId: ownerId,
         sharedWith,
       });
       setName("");
       setPrice("");
+      setForParticipantId(participantId);
       setSplitMode("mine");
       setSelectedParticipants(new Set());
       onClose();
@@ -151,6 +155,37 @@ function AddItemModal({
             onChangeText={setPrice}
             keyboardType="decimal-pad"
           />
+
+          {isOwner && participants.length > 1 && (
+            <>
+              <Text style={modalStyles.label}>Ordering for</Text>
+              <View style={modalStyles.splitOptions}>
+                {participants.map((p) => {
+                  const pName = p.profiles?.display_name ?? p.guests?.name ?? "?";
+                  const isSelected = forParticipantId === p.id;
+                  return (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={[
+                        modalStyles.splitOption,
+                        isSelected && modalStyles.splitOptionActive,
+                      ]}
+                      onPress={() => setForParticipantId(p.id)}
+                    >
+                      <Text
+                        style={[
+                          modalStyles.splitOptionText,
+                          isSelected && modalStyles.splitOptionTextActive,
+                        ]}
+                      >
+                        {pName}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
 
           <Text style={modalStyles.label}>Who is this for?</Text>
           <View style={modalStyles.splitOptions}>
@@ -582,6 +617,7 @@ export default function OrderDetail() {
           orderId={orderId}
           participantId={myParticipant.id}
           participants={participants ?? []}
+          isOwner={isOwner}
         />
       )}
 

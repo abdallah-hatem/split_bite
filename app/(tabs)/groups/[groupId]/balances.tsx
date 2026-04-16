@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, Stack } from "expo-router";
 import { useAuth } from "@/src/providers/AuthProvider";
-import { useGroupBalances, useSettleUp } from "@/src/hooks/useBalances";
+import { useGroupBalances, useSettleUp, usePendingSettlements, useConfirmSettlement } from "@/src/hooks/useBalances";
 import { formatCurrency } from "@/src/utils/currency";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
@@ -20,6 +20,13 @@ export default function BalancesScreen() {
   const { user } = useAuth();
   const { data, isLoading, refetch, isRefetching } = useGroupBalances(groupId);
   const settleUp = useSettleUp();
+  const { data: pendingSettlements } = usePendingSettlements();
+  const confirmSettlement = useConfirmSettlement();
+
+  // Filter pending settlements for this group
+  const groupPending = (pendingSettlements ?? []).filter(
+    (s: any) => s.group_id === groupId
+  );
 
   const handleSettle = (
     toUserId: string,
@@ -28,11 +35,11 @@ export default function BalancesScreen() {
   ) => {
     Alert.alert(
       "Settle Up",
-      `Confirm you've paid ${formatCurrency(amount)} to ${toName}?`,
+      `Send a settlement request of ${formatCurrency(amount)} to ${toName}? They will need to confirm.`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Confirm Payment",
+          text: "Send Request",
           onPress: async () => {
             try {
               await settleUp.mutateAsync({
@@ -40,7 +47,7 @@ export default function BalancesScreen() {
                 toUserId,
                 amount,
               });
-              Alert.alert("Done!", `Settlement with ${toName} recorded.`);
+              Alert.alert("Sent!", `Settlement request sent to ${toName}. Waiting for confirmation.`);
             } catch (error: any) {
               Alert.alert("Error", error.message);
             }
@@ -99,6 +106,79 @@ export default function BalancesScreen() {
           <Text style={styles.settledText}>All settled up!</Text>
         )}
       </View>
+
+      {/* Pending Settlements */}
+      {groupPending.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Pending Settlements</Text>
+          {groupPending.map((s: any) => {
+            const isReceiver = s.to_user_id === user?.id;
+            const otherName = isReceiver
+              ? s.from_profile?.display_name ?? "Unknown"
+              : s.to_profile?.display_name ?? "Unknown";
+
+            return (
+              <View key={s.id} style={styles.pendingCard}>
+                <View style={styles.pendingInfo}>
+                  <Text style={styles.pendingText}>
+                    {isReceiver
+                      ? `${otherName} says they paid you`
+                      : `You requested from ${otherName}`}
+                  </Text>
+                  <Text style={styles.pendingAmount}>
+                    {formatCurrency(s.amount)}
+                  </Text>
+                </View>
+                {isReceiver ? (
+                  <View style={styles.pendingActions}>
+                    <TouchableOpacity
+                      style={styles.confirmButton}
+                      onPress={() =>
+                        Alert.alert(
+                          "Confirm Settlement",
+                          `Did you receive ${formatCurrency(s.amount)} from ${otherName}?`,
+                          [
+                            { text: "No", style: "cancel" },
+                            {
+                              text: "Yes, Received",
+                              onPress: () =>
+                                confirmSettlement.mutate({
+                                  settlementId: s.id,
+                                  groupId,
+                                  fromUserId: s.from_user_id,
+                                  amount: s.amount,
+                                  action: "confirmed",
+                                }),
+                            },
+                          ]
+                        )
+                      }
+                    >
+                      <Text style={styles.confirmText}>Confirm</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.rejectButton}
+                      onPress={() =>
+                        confirmSettlement.mutate({
+                          settlementId: s.id,
+                          groupId,
+                          fromUserId: s.from_user_id,
+                          amount: s.amount,
+                          action: "rejected",
+                        })
+                      }
+                    >
+                      <Text style={styles.rejectText}>Reject</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={styles.waitingText}>Waiting...</Text>
+                )}
+              </View>
+            );
+          })}
+        </>
+      )}
 
       {/* My Balances */}
       {myBalances.length > 0 && (
@@ -206,6 +286,16 @@ const styles = StyleSheet.create({
   balanceAmount: { fontSize: FontSize.sm, fontWeight: "500", marginTop: 2 },
   settleButton: { backgroundColor: Colors.primary, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm },
   settleButtonText: { color: "#FFFFFF", fontSize: FontSize.sm, fontWeight: "600" },
+  pendingCard: { backgroundColor: Colors.warningLight, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm },
+  pendingInfo: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm },
+  pendingText: { fontSize: FontSize.sm, color: Colors.text, flex: 1 },
+  pendingAmount: { fontSize: FontSize.md, fontWeight: "700", color: Colors.text },
+  pendingActions: { flexDirection: "row", gap: Spacing.sm },
+  confirmButton: { flex: 1, backgroundColor: Colors.success, borderRadius: BorderRadius.sm, padding: Spacing.sm, alignItems: "center" },
+  confirmText: { color: "#FFFFFF", fontSize: FontSize.sm, fontWeight: "600" },
+  rejectButton: { flex: 1, backgroundColor: Colors.errorLight, borderRadius: BorderRadius.sm, padding: Spacing.sm, alignItems: "center" },
+  rejectText: { color: Colors.error, fontSize: FontSize.sm, fontWeight: "600" },
+  waitingText: { fontSize: FontSize.sm, color: Colors.warning, fontWeight: "500" },
   orderBreakdown: { marginTop: Spacing.sm, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
   orderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.xs },
   orderInfo: { flex: 1 },
