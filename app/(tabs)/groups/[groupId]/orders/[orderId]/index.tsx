@@ -44,10 +44,9 @@ function AddItemModal({
 }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [forParticipantId, setForParticipantId] = useState(participantId);
-  const [splitMode, setSplitMode] = useState<"mine" | "some" | "all">("mine");
+  // Selected participants for this item (who it's assigned to / split with)
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(
-    new Set()
+    new Set([participantId])
   );
   const addItem = useAddItem();
 
@@ -55,12 +54,21 @@ function AddItemModal({
     setSelectedParticipants((prev) => {
       const next = new Set(prev);
       if (next.has(pid)) {
-        next.delete(pid);
+        // Don't allow deselecting everyone
+        if (next.size > 1) next.delete(pid);
       } else {
         next.add(pid);
       }
       return next;
     });
+  };
+
+  const selectAll = () => {
+    setSelectedParticipants(new Set(participants.map((p) => p.id)));
+  };
+
+  const selectOnlyMe = () => {
+    setSelectedParticipants(new Set([participantId]));
   };
 
   const handleAdd = async () => {
@@ -69,25 +77,13 @@ function AddItemModal({
       return;
     }
 
-    if (splitMode === "some" && selectedParticipants.size === 0) {
-      Alert.alert("Error", "Please select at least one person to split with");
-      return;
-    }
-
     try {
-      let sharedWith: string[] | undefined;
-      let isShared = false;
-
-      const ownerId = forParticipantId || participantId;
-
-      if (splitMode === "all") {
-        isShared = true;
-        sharedWith = participants.map((p) => p.id);
-      } else if (splitMode === "some") {
-        isShared = true;
-        sharedWith = [ownerId, ...Array.from(selectedParticipants)];
-        sharedWith = [...new Set(sharedWith)];
-      }
+      const selected = Array.from(selectedParticipants);
+      const isShared = selected.length > 1;
+      // The "added_by" is the first selected person (or self)
+      const ownerId = selected.includes(participantId)
+        ? participantId
+        : selected[0];
 
       await addItem.mutateAsync({
         orderId,
@@ -96,13 +92,11 @@ function AddItemModal({
         quantity: 1,
         isShared,
         participantId: ownerId,
-        sharedWith,
+        sharedWith: isShared ? selected : undefined,
       });
       setName("");
       setPrice("");
-      setForParticipantId(participantId);
-      setSplitMode("mine");
-      setSelectedParticipants(new Set());
+      setSelectedParticipants(new Set([participantId]));
       onClose();
     } catch (error: any) {
       Alert.alert("Error", error.message);
@@ -156,76 +150,60 @@ function AddItemModal({
             keyboardType="decimal-pad"
           />
 
-          {isOwner && participants.length > 1 && (
+          {participants.length > 1 && (
             <>
-              <Text style={modalStyles.label}>Ordering for</Text>
-              <View style={modalStyles.splitOptions}>
-                {participants.map((p) => {
-                  const pName = p.profiles?.display_name ?? p.guests?.name ?? "?";
-                  const isSelected = forParticipantId === p.id;
-                  return (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[
-                        modalStyles.splitOption,
-                        isSelected && modalStyles.splitOptionActive,
-                      ]}
-                      onPress={() => setForParticipantId(p.id)}
-                    >
-                      <Text
-                        style={[
-                          modalStyles.splitOptionText,
-                          isSelected && modalStyles.splitOptionTextActive,
-                        ]}
-                      >
-                        {pName}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </>
-          )}
+              <Text style={modalStyles.label}>This item is for</Text>
 
-          <Text style={modalStyles.label}>Who is this for?</Text>
-          <View style={modalStyles.splitOptions}>
-            {(
-              [
-                { key: "mine", label: "Just me" },
-                { key: "some", label: "Split with..." },
-                { key: "all", label: "Everyone" },
-              ] as const
-            ).map((opt) => (
-              <TouchableOpacity
-                key={opt.key}
-                style={[
-                  modalStyles.splitOption,
-                  splitMode === opt.key && modalStyles.splitOptionActive,
-                ]}
-                onPress={() => setSplitMode(opt.key)}
-              >
-                <Text
+              {/* Quick actions */}
+              <View style={modalStyles.quickActions}>
+                <TouchableOpacity
                   style={[
-                    modalStyles.splitOptionText,
-                    splitMode === opt.key &&
-                      modalStyles.splitOptionTextActive,
+                    modalStyles.quickAction,
+                    selectedParticipants.size === 1 &&
+                      selectedParticipants.has(participantId) &&
+                      modalStyles.quickActionActive,
                   ]}
+                  onPress={selectOnlyMe}
                 >
-                  {opt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Text
+                    style={[
+                      modalStyles.quickActionText,
+                      selectedParticipants.size === 1 &&
+                        selectedParticipants.has(participantId) &&
+                        modalStyles.quickActionTextActive,
+                    ]}
+                  >
+                    Just me
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    modalStyles.quickAction,
+                    selectedParticipants.size === participants.length &&
+                      modalStyles.quickActionActive,
+                  ]}
+                  onPress={selectAll}
+                >
+                  <Text
+                    style={[
+                      modalStyles.quickActionText,
+                      selectedParticipants.size === participants.length &&
+                        modalStyles.quickActionTextActive,
+                    ]}
+                  >
+                    Everyone
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-          {splitMode === "some" && (
-            <View style={modalStyles.participantList}>
-              {participants
-                .filter((p) => p.id !== participantId)
-                .map((p) => {
+              {/* Participant list */}
+              <View style={modalStyles.participantList}>
+                {participants.map((p) => {
                   const pName =
                     p.profiles?.display_name ??
                     p.guests?.name ??
                     "Unknown";
+                  const isMe = p.id === participantId;
                   const selected = selectedParticipants.has(p.id);
                   return (
                     <TouchableOpacity
@@ -243,12 +221,13 @@ function AddItemModal({
                         ]}
                       />
                       <Text style={modalStyles.participantName}>
-                        {pName}
+                        {pName}{isMe ? " (you)" : ""}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
-            </View>
+              </View>
+            </>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -681,11 +660,11 @@ const modalStyles = StyleSheet.create({
   label: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.text, marginTop: Spacing.md, marginBottom: Spacing.xs },
   subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
   input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.md, fontSize: FontSize.md, color: Colors.text },
-  splitOptions: { flexDirection: "row", gap: Spacing.xs, marginTop: Spacing.xs },
-  splitOption: { flex: 1, paddingVertical: Spacing.sm, alignItems: "center", borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
-  splitOptionActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + "15" },
-  splitOptionText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: "500" },
-  splitOptionTextActive: { color: Colors.primary, fontWeight: "600" },
+  quickActions: { flexDirection: "row", gap: Spacing.xs, marginTop: Spacing.xs, marginBottom: Spacing.sm },
+  quickAction: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
+  quickActionActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + "15" },
+  quickActionText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: "500" },
+  quickActionTextActive: { color: Colors.primary, fontWeight: "600" },
   participantList: { marginTop: Spacing.sm, gap: Spacing.xs },
   participantRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, padding: Spacing.sm, borderRadius: BorderRadius.sm, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   participantRowSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + "10" },
