@@ -15,7 +15,7 @@ import { useAuth } from "@/src/providers/AuthProvider";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 export default function SignUp() {
-  const { signUp } = useAuth();
+  const { signUp, signIn } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,10 +41,8 @@ export default function SignUp() {
     setLoading(true);
     try {
       await signUp(email, password);
-      Alert.alert(
-        "Check your email",
-        "We sent you a confirmation link to verify your account."
-      );
+      // Auto sign-in after registration (no email confirmation needed)
+      await signIn(email, password);
     } catch (error: any) {
       Alert.alert("Error", error.message);
     } finally {
