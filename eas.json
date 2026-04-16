@@ -15,6 +15,7 @@
       "distribution": "internal"
     },
     "production": {
+      "channel": "production",
       "ios": {
         "autoIncrement": true
       }
