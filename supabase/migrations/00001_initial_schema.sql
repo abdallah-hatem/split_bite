@@ -3,7 +3,7 @@
 -- ============================================
 
 -- Enable required extensions
-create extension if not exists "pgcrypto";
+create extension if not exists "pgcrypto" with schema extensions;
 
 -- ============================================
 -- PROFILES (extends auth.users)
@@ -54,7 +54,7 @@ create table public.groups (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   description text,
-  invite_code text unique not null default encode(gen_random_bytes(5), 'hex'),
+  invite_code text unique not null default substr(replace(gen_random_uuid()::text, '-', ''), 1, 10),
   currency text not null default 'EGP',
   created_by uuid not null default auth.uid() references public.profiles(id),
   created_at timestamptz not null default now(),
