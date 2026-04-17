@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
   Text,
@@ -9,10 +10,12 @@ import {
   Alert,
   RefreshControl,
 } from "react-native";
-import { useLocalSearchParams, Stack } from "expo-router";
+import { useLocalSearchParams, Stack, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/providers/AuthProvider";
+import { supabase } from "@/src/lib/supabase";
 import { useGroupBalances, useSettleUp, usePendingSettlements, useConfirmSettlement } from "@/src/hooks/useBalances";
 import { formatCurrency } from "@/src/utils/currency";
+import { notifyReminder } from "@/src/utils/notifications";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 export default function BalancesScreen() {
@@ -20,13 +23,60 @@ export default function BalancesScreen() {
   const { user } = useAuth();
   const { data, isLoading, refetch, isRefetching } = useGroupBalances(groupId);
   const settleUp = useSettleUp();
-  const { data: pendingSettlements } = usePendingSettlements();
+  const { data: pendingSettlements, refetch: refetchPending } = usePendingSettlements();
   const confirmSettlement = useConfirmSettlement();
+
+  // Refetch on screen focus (important for notification deep links)
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+      refetchPending();
+    }, [])
+  );
 
   // Filter pending settlements for this group
   const groupPending = (pendingSettlements ?? []).filter(
     (s: any) => s.group_id === groupId
   );
+
+  const [reminderCooldowns, setReminderCooldowns] = useState<Record<string, boolean>>({});
+
+  // Load cooldowns on mount
+  useEffect(() => {
+    (async () => {
+      const keys = await AsyncStorage.getAllKeys();
+      const reminderKeys = keys.filter((k) => k.startsWith("reminder:"));
+      const now = Date.now();
+      const cooldowns: Record<string, boolean> = {};
+      for (const key of reminderKeys) {
+        const val = await AsyncStorage.getItem(key);
+        if (val && now - parseInt(val) < 3600000) {
+          const userId = key.replace("reminder:", "");
+          cooldowns[userId] = true;
+        } else {
+          await AsyncStorage.removeItem(key);
+        }
+      }
+      setReminderCooldowns(cooldowns);
+    })();
+  }, []);
+
+  const handleRemind = async (toUserId: string, toName: string, amount: number) => {
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user!.id)
+        .single();
+
+      await notifyReminder(toUserId, profile?.display_name ?? "Someone", amount);
+      await AsyncStorage.setItem(`reminder:${toUserId}`, Date.now().toString());
+      setReminderCooldowns((prev) => ({ ...prev, [toUserId]: true }));
+      Alert.alert("Sent!", `Reminder sent to ${toName}`);
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    }
+  };
 
   const handleSettle = (
     toUserId: string,
@@ -200,16 +250,41 @@ export default function BalancesScreen() {
                       : `You owe ${formatCurrency(Math.abs(b.net))}`}
                   </Text>
                 </View>
-                {b.net < 0 && (
+                {b.net > 0 && (
                   <TouchableOpacity
-                    style={styles.settleButton}
-                    onPress={() =>
-                      handleSettle(b.userId, b.displayName, Math.abs(b.net))
-                    }
+                    style={[
+                      styles.remindButton,
+                      reminderCooldowns[b.userId] && styles.remindButtonDisabled,
+                    ]}
+                    onPress={() => handleRemind(b.userId, b.displayName, b.net)}
+                    disabled={!!reminderCooldowns[b.userId]}
                   >
-                    <Text style={styles.settleButtonText}>Settle Up</Text>
+                    <Text style={[
+                      styles.remindButtonText,
+                      reminderCooldowns[b.userId] && styles.remindButtonTextDisabled,
+                    ]}>
+                      {reminderCooldowns[b.userId] ? "Reminded" : "Remind"}
+                    </Text>
                   </TouchableOpacity>
                 )}
+                {b.net < 0 && (() => {
+                  const hasPending = groupPending.some(
+                    (s: any) =>
+                      s.from_user_id === user?.id && s.to_user_id === b.userId
+                  );
+                  return hasPending ? (
+                    <Text style={styles.pendingLabel}>Pending...</Text>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.settleButton}
+                      onPress={() =>
+                        handleSettle(b.userId, b.displayName, Math.abs(b.net))
+                      }
+                    >
+                      <Text style={styles.settleButtonText}>Settle Up</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
               </View>
 
               {/* Order breakdown */}
@@ -286,6 +361,11 @@ const styles = StyleSheet.create({
   balanceAmount: { fontSize: FontSize.sm, fontWeight: "500", marginTop: 2 },
   settleButton: { backgroundColor: Colors.primary, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm },
   settleButtonText: { color: "#FFFFFF", fontSize: FontSize.sm, fontWeight: "600" },
+  pendingLabel: { fontSize: FontSize.sm, color: Colors.warning, fontWeight: "600" },
+  remindButton: { backgroundColor: Colors.warningLight, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm },
+  remindButtonDisabled: { backgroundColor: Colors.surfaceSecondary },
+  remindButtonText: { color: Colors.warning, fontSize: FontSize.sm, fontWeight: "600" },
+  remindButtonTextDisabled: { color: Colors.textTertiary },
   pendingCard: { backgroundColor: Colors.warningLight, borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm },
   pendingInfo: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm },
   pendingText: { fontSize: FontSize.sm, color: Colors.text, flex: 1 },

@@ -65,10 +65,11 @@ export type CalcResult = {
 };
 
 /**
- * Round to 2 decimal places
+ * Round to nearest 0.5
+ * e.g. 1.1→1.5, 1.4→1.5, 1.6→2.0, 3.3→3.5, 3.7→4.0
  */
 function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+  return Math.round(n * 2) / 2;
 }
 
 /**
@@ -86,7 +87,7 @@ function fixRounding(
 
   // Sort by totalOwed descending so we adjust the largest shares
   const sorted = [...breakdowns].sort((a, b) => b.totalOwed - a.totalOwed);
-  const step = diff > 0 ? 0.01 : -0.01;
+  const step = diff > 0 ? 0.5 : -0.5;
 
   for (const b of sorted) {
     if (round2(diff) === 0) break;
@@ -178,6 +179,9 @@ export function calculateSplit(input: CalcInput): CalcResult {
   }
 
   // Step 8: Transfer guest debts to hosts
+  // Track guest settlements separately (host ↔ guest)
+  const guestSettlements: { guestName: string; hostUserId: string; amount: number }[] = [];
+
   const guestParticipants = participants.filter(
     (p) => p.guestId && p.hostUserId
   );
@@ -192,13 +196,44 @@ export function calculateSplit(input: CalcInput): CalcResult {
     );
     if (!hostBreakdown) continue;
 
-    // Transfer the guest's net to the host
+    // If guest has a non-zero net, track it as a guest settlement
+    if (Math.abs(guestBreakdown.net) > 0.25) {
+      const guestName =
+        breakdowns.find((b) => b.participantId === guest.id)?.guestId ?? guest.guestId ?? "Guest";
+      guestSettlements.push({
+        guestName: guest.guestId ?? "Guest",
+        hostUserId: guest.hostUserId!,
+        amount: guestBreakdown.net, // negative = guest owes host, positive = host owes guest
+      });
+    }
+
+    // Transfer the guest's net to the host for inter-user debt calculation
     hostBreakdown.net = round2(hostBreakdown.net + guestBreakdown.net);
     guestBreakdown.net = 0;
   }
 
-  // Step 9: Compute debts (who owes whom)
+  // Step 9: Compute debts between real users
   const debts = computeDebts(breakdowns, participants);
+
+  // Step 10: Add guest settlement info to debts display
+  // These show as "bodz owes Moooo (Guest)" or "Moooo (Guest) owes bodz"
+  for (const gs of guestSettlements) {
+    if (gs.amount > 0.25) {
+      // Host owes guest (guest overpaid)
+      debts.push({
+        fromUserId: gs.hostUserId,
+        toUserId: `guest:${gs.guestName}`,
+        amount: round2(gs.amount),
+      });
+    } else if (gs.amount < -0.25) {
+      // Guest owes host (guest underpaid) — host responsible
+      debts.push({
+        fromUserId: `guest:${gs.guestName}`,
+        toUserId: gs.hostUserId,
+        amount: round2(Math.abs(gs.amount)),
+      });
+    }
+  }
 
   const totalOwed = round2(breakdowns.reduce((s, b) => s + b.totalOwed, 0));
   const totalPaid = round2(breakdowns.reduce((s, b) => s + b.totalPaid, 0));
@@ -236,10 +271,10 @@ function computeDebts(
 
   // Separate into creditors (positive net) and debtors (negative net)
   const creditors = userNets
-    .filter((u) => u.net > 0.005)
+    .filter((u) => u.net > 0.25)
     .sort((a, b) => b.net - a.net);
   const debtors = userNets
-    .filter((u) => u.net < -0.005)
+    .filter((u) => u.net < -0.25)
     .map((u) => ({ ...u, net: Math.abs(u.net) }))
     .sort((a, b) => b.net - a.net);
 
@@ -260,8 +295,8 @@ function computeDebts(
     creditors[ci].net = round2(creditors[ci].net - amount);
     debtors[di].net = round2(debtors[di].net - amount);
 
-    if (creditors[ci].net < 0.005) ci++;
-    if (debtors[di].net < 0.005) di++;
+    if (creditors[ci].net < 0.25) ci++;
+    if (debtors[di].net < 0.25) di++;
   }
 
   return debts;

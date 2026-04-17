@@ -5,7 +5,7 @@ import {
   computeNetBalances,
   optimizeSettlements,
 } from "@/src/utils/settlement";
-import { notifySettlement } from "@/src/utils/notifications";
+import { notifySettlement, notifySettlementRejected } from "@/src/utils/notifications";
 
 export type OrderDebt = {
   orderId: string;
@@ -161,7 +161,8 @@ export function useSettleUp() {
       notifySettlement(
         toUserId,
         profile?.display_name ?? "Someone",
-        amount
+        amount,
+        groupId
       );
     },
     onSuccess: (_, variables) => {
@@ -221,18 +222,36 @@ export function useConfirmSettlement() {
 
       // If confirmed, create the actual ledger entry
       if (action === "confirmed") {
+        // Reverse direction: creditor "owes" debtor to cancel original debt
+        // Original debt: fromUser → toUser (debtor owes creditor)
+        // Settlement:    toUser → fromUser (cancels it out)
         const { error: ledgerError } = await supabase
           .from("ledger_entries")
           .insert({
             group_id: groupId,
-            from_user_id: fromUserId,
-            to_user_id: user!.id,
+            from_user_id: user!.id,
+            to_user_id: fromUserId,
             amount,
             type: "settlement",
             description: "Confirmed settlement",
           });
 
         if (ledgerError) throw ledgerError;
+      }
+
+      if (action === "rejected") {
+        // Notify the sender that their settlement was rejected
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", user!.id)
+          .single();
+
+        notifySettlementRejected(
+          fromUserId,
+          profile?.display_name ?? "Someone",
+          amount
+        );
       }
     },
     onSuccess: (_, variables) => {

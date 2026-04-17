@@ -103,14 +103,45 @@ export async function notifyOrderFinalized(
 /**
  * Notify a user that someone settled a debt with them
  */
-export async function notifySettlement(
+/**
+ * Send a reminder to a user who owes you
+ */
+export async function notifyReminder(
   toUserId: string,
   fromName: string,
   amount: number
 ) {
   await sendPushNotifications([toUserId], {
+    title: "Payment Reminder",
+    body: `${fromName} is reminding you about ${amount.toFixed(2)} you owe.`,
+    data: { type: "reminder" },
+  });
+}
+
+/**
+ * Notify sender that their settlement was rejected
+ */
+export async function notifySettlementRejected(
+  toUserId: string,
+  rejectorName: string,
+  amount: number
+) {
+  await sendPushNotifications([toUserId], {
+    title: "Settlement Rejected",
+    body: `${rejectorName} rejected your settlement of ${amount.toFixed(2)}.`,
+    data: { type: "settlement_rejected" },
+  });
+}
+
+export async function notifySettlement(
+  toUserId: string,
+  fromName: string,
+  amount: number,
+  groupId: string
+) {
+  await sendPushNotifications([toUserId], {
     title: "Settlement Request",
     body: `${fromName} says they paid you ${amount.toFixed(2)}. Please confirm.`,
-    data: { type: "settlement_request" },
+    data: { type: "settlement_request", groupId },
   });
 }

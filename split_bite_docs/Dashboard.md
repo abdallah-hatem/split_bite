@@ -1,43 +1,37 @@
 # SplitBite Dashboard
 
 ## Project Status
-**Current Phase:** MVP Complete - Polish & Deep linking
-**Last Updated:** 2026-04-14
+**Current Phase:** MVP Complete — App Store build in progress
+**Last Updated:** 2026-04-17
 
 ---
 
-## All MVP Features Complete
-- Auth (sign up/in/out with session persistence)
-- Groups (create, join via invite code, leave, kick members)
-- Orders (create, add items with split options, add guests, lock/reopen/delete)
-- Item splitting (just me / split with specific people / everyone)
+## All Features Complete
+- Auth (sign up with auto-login, sign in/out, account deletion)
+- Groups (create, join via invite code, leave, kick members, delete group)
+- Orders (create, add/edit/delete items for self/others, add guests, lock/reopen/delete)
+- Unified item assignment (Just me / Everyone / pick specific people)
 - Real-time collaboration (Supabase Realtime)
 - Bill finalization (editable prices, tax/VAT/delivery/discount, multi-payer)
-- Total validation (items + fees must equal bill total)
-- Payment validation (payments must match bill total)
-- Order summary (full breakdown, who paid, per-person split, settlements)
+- Total & payment validation
+- Order summary (full breakdown, who paid, per-person split, guest settlements)
 - Group balances with per-order debt breakdown
-- Settle up flow with ledger reversal
+- Settlement verification (beneficiary confirms, rejection notifies sender)
+- Payment reminders (once per hour cooldown)
 - Activity feed (paginated infinite scroll)
-- Paginated orders list (infinite scroll)
-- Push notifications (order created, finalized, settlement)
-- Profile screen with sign out
-- Silent refetch on screen focus
-- 35 unit tests passing
+- Push notifications with deep linking
+- Profile editing with name uniqueness check across groups
+- OTA updates via EAS Update
+- Rounding to nearest 0.5 EGP
+- 47 unit tests passing
 
 ---
 
-## Active Work
-- [ ] Notification deep linking (tap notification → navigate to relevant screen)
-
----
-
-## Push Notifications Status
-| Event | Notified |
-|-------|----------|
-| Order created | Group members |
-| Order finalized | Group members |
-| Settlement received | Recipient |
-| Member joins group | Not yet |
-| Item added to order | Not yet |
-| Order locked | Not yet |
+## Migrations
+| # | Description |
+|---|------------|
+| 00001 | Initial schema (11 tables + triggers + indexes) |
+| 00002 | RLS policies + helper functions |
+| 00003 | Pending settlements table |
+| 00004 | delete_user_account() RPC function |
+| 00005 | Fix guest cascade on order_participants |

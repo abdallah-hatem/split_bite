@@ -45,10 +45,10 @@ export default function FinalizeScreen() {
   const [actualTotal, setActualTotal] = useState(
     order?.actual_total?.toString() ?? ""
   );
-  const [tax, setTax] = useState(order?.tax?.toString() ?? "0");
-  const [vat, setVat] = useState(order?.vat?.toString() ?? "0");
-  const [delivery, setDelivery] = useState(order?.delivery?.toString() ?? "0");
-  const [discount, setDiscount] = useState(order?.discount?.toString() ?? "0");
+  const [tax, setTax] = useState(order?.tax ? order.tax.toString() : "");
+  const [vat, setVat] = useState(order?.vat ? order.vat.toString() : "");
+  const [delivery, setDelivery] = useState(order?.delivery ? order.delivery.toString() : "");
+  const [discount, setDiscount] = useState(order?.discount ? order.discount.toString() : "");
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
   const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -116,6 +116,7 @@ export default function FinalizeScreen() {
         id: p.id,
         userId: p.user_id,
         guestId: p.guest_id,
+        hostUserId: (p as any).guests?.host_user_id ?? undefined,
         isIncluded: true,
       })
     );
@@ -252,14 +253,17 @@ export default function FinalizeScreen() {
 
             // Write ledger entries
             if (preview?.debts) {
-              const ledgerEntries = preview.debts.map((d) => ({
-                group_id: groupId,
-                from_user_id: d.fromUserId,
-                to_user_id: d.toUserId,
-                amount: d.amount,
-                type: "order_debt" as const,
-                order_id: orderId,
-              }));
+              // Only insert debts between real users (not guest: prefixed)
+              const ledgerEntries = preview.debts
+                .filter((d) => !d.fromUserId.startsWith("guest:") && !d.toUserId.startsWith("guest:"))
+                .map((d) => ({
+                  group_id: groupId,
+                  from_user_id: d.fromUserId,
+                  to_user_id: d.toUserId,
+                  amount: d.amount,
+                  type: "order_debt" as const,
+                  order_id: orderId,
+                }));
 
               if (ledgerEntries.length > 0) {
                 // Use service role via RPC or direct insert
@@ -268,7 +272,8 @@ export default function FinalizeScreen() {
                   .from("ledger_entries")
                   .insert(ledgerEntries);
                 if (error) {
-                  console.warn("Ledger insert failed (RLS):", error.message);
+                  console.error("Ledger insert failed:", error.message);
+                  Alert.alert("Warning", "Failed to update group balances: " + error.message);
                 }
               }
             }
@@ -359,7 +364,7 @@ export default function FinalizeScreen() {
               value={
                 itemPrices[item.id] !== undefined
                   ? itemPrices[item.id]
-                  : item.price?.toString() ?? ""
+                  : item.price ? item.price.toString() : ""
               }
               onChangeText={(v) =>
                 setItemPrices((prev) => ({ ...prev, [item.id]: v }))
@@ -497,16 +502,19 @@ export default function FinalizeScreen() {
           <View style={styles.previewSection}>
             <Text style={styles.sectionTitle}>Preview</Text>
             {preview.breakdowns
-              .filter((b) => b.userId)
+              .filter((b) => b.totalOwed > 0)
               .map((b) => {
                 const p = participants?.find(
                   (p) => p.id === b.participantId
                 );
                 const name =
-                  p?.profiles?.display_name ?? "Unknown";
+                  p?.profiles?.display_name ?? p?.guests?.name ?? "Unknown";
+                const isGuest = !!b.guestId;
                 return (
                   <View key={b.participantId} style={styles.previewRow}>
-                    <Text style={styles.previewName}>{name}</Text>
+                    <Text style={styles.previewName}>
+                      {name}{isGuest ? "  (Guest)" : ""}
+                    </Text>
                     <View style={styles.previewAmounts}>
                       <Text style={styles.previewOwes}>
                         Owes: {formatCurrency(b.totalOwed)}
@@ -516,20 +524,70 @@ export default function FinalizeScreen() {
                           Paid: {formatCurrency(b.totalPaid)}
                         </Text>
                       )}
-                      <Text
-                        style={[
-                          styles.previewNet,
-                          { color: b.net >= 0 ? Colors.success : Colors.error },
-                        ]}
-                      >
-                        {b.net >= 0
-                          ? `Gets back ${formatCurrency(b.net)}`
-                          : `Owes ${formatCurrency(Math.abs(b.net))}`}
-                      </Text>
+                      {isGuest ? (
+                        <Text style={[styles.previewNet, { color: Colors.textSecondary }]}>
+                          {b.totalPaid > 0
+                            ? `Paid ${formatCurrency(b.totalPaid)} · Share charged to host`
+                            : "Charged to host"}
+                        </Text>
+                      ) : b.net === 0 ? (
+                        <Text style={[styles.previewNet, { color: Colors.success }]}>
+                          Settled
+                        </Text>
+                      ) : (
+                        <Text
+                          style={[
+                            styles.previewNet,
+                            { color: b.net > 0 ? Colors.success : Colors.error },
+                          ]}
+                        >
+                          {b.net > 0
+                            ? `Gets back ${formatCurrency(b.net)}`
+                            : `Owes ${formatCurrency(Math.abs(b.net))}`}
+                        </Text>
+                      )}
                     </View>
                   </View>
                 );
               })}
+          </View>
+        )}
+
+        {/* Settlements */}
+        {preview && preview.debts.length > 0 && (
+          <View style={styles.settlementsSection}>
+            <Text style={styles.sectionTitle}>Who Pays Who</Text>
+            {preview.debts.map((d, i) => {
+              const resolveDebtName = (id: string) => {
+                if (id.startsWith("guest:")) {
+                  const guestId = id.replace("guest:", "");
+                  const guestP = participants?.find((p) => p.guest_id === guestId);
+                  return (guestP?.guests?.name ?? "Guest") + " (Guest)";
+                }
+                const p = participants?.find((p) => p.user_id === id);
+                return p?.profiles?.display_name ?? "Unknown";
+              };
+              const fromName = resolveDebtName(d.fromUserId);
+              const toName = resolveDebtName(d.toUserId);
+              return (
+                <View key={i} style={styles.settlementRow}>
+                  <View style={styles.settlementArrow}>
+                    <Text style={styles.settlementFrom}>{fromName}</Text>
+                    <Text style={styles.settlementArrowText}>→</Text>
+                    <Text style={styles.settlementTo}>{toName}</Text>
+                  </View>
+                  <Text style={styles.settlementAmount}>
+                    {formatCurrency(d.amount)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {preview && preview.debts.length === 0 && preview.breakdowns.length > 0 && (
+          <View style={styles.settlementsSection}>
+            <Text style={styles.allSettledText}>Everyone is settled!</Text>
           </View>
         )}
 
@@ -587,6 +645,14 @@ const styles = StyleSheet.create({
   previewOwes: { fontSize: FontSize.sm, color: Colors.textSecondary },
   previewPaid: { fontSize: FontSize.sm, color: Colors.textSecondary },
   previewNet: { fontSize: FontSize.sm, fontWeight: "600", marginTop: 2 },
+  settlementsSection: { marginTop: Spacing.lg, backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
+  settlementRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  settlementArrow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, flex: 1 },
+  settlementFrom: { fontSize: FontSize.md, color: Colors.error, fontWeight: "500" },
+  settlementArrowText: { fontSize: FontSize.lg, color: Colors.textTertiary },
+  settlementTo: { fontSize: FontSize.md, color: Colors.success, fontWeight: "500" },
+  settlementAmount: { fontSize: FontSize.md, fontWeight: "700", color: Colors.text },
+  allSettledText: { fontSize: FontSize.md, fontWeight: "600", color: Colors.success, textAlign: "center" },
   finalizeButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center", marginTop: Spacing.xl },
   finalizeText: { color: "#FFFFFF", fontSize: FontSize.md, fontWeight: "600" },
 });

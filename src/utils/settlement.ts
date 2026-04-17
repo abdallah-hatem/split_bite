@@ -44,9 +44,9 @@ export function computeNetBalances(
   return Array.from(balanceMap.entries())
     .map(([userId, amount]) => ({
       userId,
-      amount: Math.round(amount * 100) / 100,
+      amount: Math.round(amount * 2) / 2,
     }))
-    .filter((b) => Math.abs(b.amount) > 0.005);
+    .filter((b) => Math.abs(b.amount) > 0.25);
 }
 
 /**
@@ -55,12 +55,12 @@ export function computeNetBalances(
  */
 export function optimizeSettlements(balances: Balance[]): Settlement[] {
   const creditors = balances
-    .filter((b) => b.amount > 0.005)
+    .filter((b) => b.amount > 0.25)
     .map((b) => ({ ...b }))
     .sort((a, b) => b.amount - a.amount);
 
   const debtors = balances
-    .filter((b) => b.amount < -0.005)
+    .filter((b) => b.amount < -0.25)
     .map((b) => ({ ...b, amount: Math.abs(b.amount) }))
     .sort((a, b) => b.amount - a.amount);
 
@@ -83,12 +83,12 @@ export function optimizeSettlements(balances: Balance[]): Settlement[] {
     }
 
     creditors[ci].amount =
-      Math.round((creditors[ci].amount - amount) * 100) / 100;
+      Math.round((creditors[ci].amount - amount) * 2) / 2;
     debtors[di].amount =
-      Math.round((debtors[di].amount - amount) * 100) / 100;
+      Math.round((debtors[di].amount - amount) * 2) / 2;
 
-    if (creditors[ci].amount < 0.005) ci++;
-    if (debtors[di].amount < 0.005) di++;
+    if (creditors[ci].amount < 0.25) ci++;
+    if (debtors[di].amount < 0.25) di++;
   }
 
   return settlements;

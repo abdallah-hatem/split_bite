@@ -102,7 +102,7 @@ export function useOrderParticipants(orderId: string) {
       const { data, error } = await supabase
         .from("order_participants")
         .select(
-          "id, order_id, user_id, guest_id, is_included, profiles:user_id(display_name, avatar_url), guests:guest_id(name)"
+          "id, order_id, user_id, guest_id, is_included, profiles:user_id(display_name, avatar_url), guests:guest_id(name, host_user_id)"
         )
         .eq("order_id", orderId);
 
@@ -252,6 +252,62 @@ export function useAddItem() {
       return item as Item;
     },
     onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: orderKeys.items(variables.orderId),
+      });
+    },
+  });
+}
+
+export function useDeleteItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      orderId,
+    }: {
+      itemId: string;
+      orderId: string;
+    }) => {
+      const { error } = await supabase
+        .from("items")
+        .delete()
+        .eq("id", itemId);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: orderKeys.items(variables.orderId),
+      });
+    },
+  });
+}
+
+export function useUpdateItem() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      itemId,
+      orderId,
+      name,
+      price,
+    }: {
+      itemId: string;
+      orderId: string;
+      name: string;
+      price: number | null;
+    }) => {
+      const { error } = await supabase
+        .from("items")
+        .update({ name, price })
+        .eq("id", itemId);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: orderKeys.items(variables.orderId),
       });

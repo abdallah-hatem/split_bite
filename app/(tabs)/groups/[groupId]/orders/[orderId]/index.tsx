@@ -12,6 +12,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
 import { useLocalSearchParams, Stack, router, Link } from "expo-router";
 import { useAuth } from "@/src/providers/AuthProvider";
@@ -23,6 +24,8 @@ import {
   useAddGuest,
   useUpdateOrderStatus,
   useDeleteOrder,
+  useDeleteItem,
+  useUpdateItem,
 } from "@/src/hooks/useOrders";
 import { useRealtimeOrder, useRealtimeItems } from "@/src/hooks/useRealtimeOrder";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
@@ -129,7 +132,7 @@ function AddItemModal({
           </TouchableOpacity>
         </View>
 
-        <View style={modalStyles.body}>
+        <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
           <Text style={modalStyles.label}>Item Name</Text>
           <TextInput
             style={modalStyles.input}
@@ -229,7 +232,8 @@ function AddItemModal({
               </View>
             </>
           )}
-        </View>
+          <View style={{ height: 40 }} />
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -326,9 +330,12 @@ export default function OrderDetail() {
   const { data: items, refetch: refetchItems } = useOrderItems(orderId);
   const updateStatus = useUpdateOrderStatus();
   const deleteOrder = useDeleteOrder();
+  const deleteItem = useDeleteItem();
+  const updateItem = useUpdateItem();
 
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddGuest, setShowAddGuest] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
 
   // Realtime subscriptions
   useRealtimeOrder(orderId);
@@ -338,6 +345,38 @@ export default function OrderDetail() {
   const isOpen = order?.status === "open";
   const isLocked = order?.status === "locked";
   const myParticipant = participants?.find((p) => p.user_id === user?.id);
+
+  const handleItemPress = (item: any) => {
+    if (!isOpen) return;
+    // Only allow editing if you're the owner or you added the item
+    const canEdit =
+      isOwner ||
+      item.added_by_participant_id === myParticipant?.id;
+    if (!canEdit) return;
+
+    Alert.alert(item.name, undefined, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Edit",
+        onPress: () => setEditingItem(item),
+      },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          Alert.alert("Delete Item", `Remove "${item.name}"?`, [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Delete",
+              style: "destructive",
+              onPress: () =>
+                deleteItem.mutate({ itemId: item.id, orderId }),
+            },
+          ]);
+        },
+      },
+    ]);
+  };
 
   const handleLock = () => {
     if (!items?.length) {
@@ -453,19 +492,21 @@ export default function OrderDetail() {
                   </TouchableOpacity>
                 )}
               </View>
-              <View style={styles.chipRow}>
+              <View style={styles.participantsList}>
                 {participants?.map((p) => {
                   const name = p.profiles?.display_name ?? p.guests?.name ?? "?";
                   const isGuest = !!p.guest_id;
                   return (
-                    <View
-                      key={p.id}
-                      style={[styles.chip, isGuest && styles.guestChip]}
-                    >
-                      <Text style={styles.chipText}>{name}</Text>
-                      {isGuest && (
-                        <Text style={styles.guestLabel}>Guest</Text>
-                      )}
+                    <View key={p.id} style={styles.participantItem}>
+                      <View style={[styles.participantAvatar, isGuest && styles.participantAvatarGuest]}>
+                        <Text style={styles.participantAvatarText}>
+                          {name[0].toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.participantInfo}>
+                        <Text style={styles.participantName} numberOfLines={1}>{name}</Text>
+                        {isGuest && <Text style={styles.participantGuestTag}>Guest</Text>}
+                      </View>
                     </View>
                   );
                 })}
@@ -478,7 +519,7 @@ export default function OrderDetail() {
                 Items ({items?.length ?? 0})
               </Text>
               {isOpen && myParticipant && (
-                <TouchableOpacity onPress={() => setShowAddItem(true)}>
+                <TouchableOpacity onPress={() => { refetchParticipants(); setShowAddItem(true); }}>
                   <Text style={styles.addLink}>+ Add Item</Text>
                 </TouchableOpacity>
               )}
@@ -513,7 +554,11 @@ export default function OrderDetail() {
           const isSharedItem = shareNames.length > 1;
 
           return (
-            <View style={styles.itemRow}>
+            <TouchableOpacity
+              style={styles.itemRow}
+              onPress={() => handleItemPress(item)}
+              disabled={!isOpen}
+            >
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 {isSharedItem ? (
@@ -529,7 +574,7 @@ export default function OrderDetail() {
                   ? `${item.price.toFixed(2)}`
                   : "No price"}
               </Text>
-            </View>
+            </TouchableOpacity>
           );
         }}
         ListFooterComponent={
@@ -606,6 +651,68 @@ export default function OrderDetail() {
         orderId={orderId}
         groupId={groupId}
       />
+
+      {/* Edit Item Modal */}
+      {editingItem && (
+        <Modal visible={true} animationType="slide">
+          <KeyboardAvoidingView
+            style={modalStyles.container}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+          >
+            <View style={modalStyles.header}>
+              <TouchableOpacity onPress={() => setEditingItem(null)}>
+                <Text style={modalStyles.headerCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={modalStyles.headerTitle}>Edit Item</Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    await updateItem.mutateAsync({
+                      itemId: editingItem.id,
+                      orderId,
+                      name: editingItem._editName ?? editingItem.name,
+                      price: editingItem._editPrice !== undefined
+                        ? (parseFloat(editingItem._editPrice) || null)
+                        : editingItem.price,
+                    });
+                    setEditingItem(null);
+                  } catch (error: any) {
+                    Alert.alert("Error", error.message);
+                  }
+                }}
+              >
+                <Text style={modalStyles.headerAction}>Save</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={modalStyles.body}>
+              <Text style={modalStyles.label}>Item Name</Text>
+              <TextInput
+                style={modalStyles.input}
+                value={editingItem._editName ?? editingItem.name}
+                onChangeText={(v) =>
+                  setEditingItem({ ...editingItem, _editName: v })
+                }
+                autoFocus
+              />
+              <Text style={modalStyles.label}>Price</Text>
+              <TextInput
+                style={modalStyles.input}
+                value={
+                  editingItem._editPrice !== undefined
+                    ? editingItem._editPrice
+                    : editingItem.price?.toString() ?? ""
+                }
+                onChangeText={(v) =>
+                  setEditingItem({ ...editingItem, _editPrice: v })
+                }
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor={Colors.textTertiary}
+              />
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -685,11 +792,14 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: "700", color: Colors.text },
   addLink: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: "600" },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs },
-  chip: { backgroundColor: Colors.primaryLight + "30", paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, borderRadius: BorderRadius.full },
-  guestChip: { backgroundColor: Colors.secondaryLight + "50" },
-  chipText: { fontSize: FontSize.sm, color: Colors.text, fontWeight: "500" },
-  guestLabel: { fontSize: FontSize.xs, color: Colors.textSecondary },
+  participantsList: { gap: Spacing.xs },
+  participantItem: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: Spacing.xs },
+  participantAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.primaryLight, justifyContent: "center", alignItems: "center" },
+  participantAvatarGuest: { backgroundColor: Colors.secondaryLight },
+  participantAvatarText: { color: "#FFFFFF", fontSize: FontSize.xs, fontWeight: "700" },
+  participantInfo: { flex: 1 },
+  participantName: { fontSize: FontSize.sm, color: Colors.text, fontWeight: "500" },
+  participantGuestTag: { fontSize: FontSize.xs, color: Colors.textTertiary },
   emptyItems: { alignItems: "center", paddingVertical: Spacing.xl },
   emptyText: { fontSize: FontSize.md, fontWeight: "600", color: Colors.textSecondary },
   emptySubtext: { fontSize: FontSize.sm, color: Colors.textTertiary, marginTop: Spacing.xs },

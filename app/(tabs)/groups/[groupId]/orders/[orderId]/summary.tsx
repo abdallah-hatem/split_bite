@@ -55,6 +55,7 @@ export default function OrderSummary() {
       id: p.id,
       userId: p.user_id,
       guestId: p.guest_id,
+      hostUserId: (p as any).guests?.host_user_id ?? undefined,
       isIncluded: true,
     }));
 
@@ -209,12 +210,16 @@ export default function OrderSummary() {
           <Text style={styles.sectionTitle}>Per-Person Breakdown</Text>
           <View style={styles.card}>
             {result.breakdowns
-              .filter((b) => b.userId)
+              .filter((b) => b.totalOwed > 0)
               .map((b) => {
                 const name = getParticipantName(b.participantId);
+                const isGuest = !!b.guestId;
+
                 return (
                   <View key={b.participantId} style={styles.breakdownRow}>
-                    <Text style={styles.breakdownName}>{name}</Text>
+                    <Text style={styles.breakdownName}>
+                      {name}{isGuest ? "  (Guest)" : ""}
+                    </Text>
                     <View style={styles.breakdownDetails}>
                       <View style={styles.breakdownLine}>
                         <Text style={styles.breakdownLabel}>Items</Text>
@@ -270,16 +275,28 @@ export default function OrderSummary() {
                       )}
                     </View>
                     <View style={styles.netRow}>
-                      <Text
-                        style={[
-                          styles.netText,
-                          { color: b.net >= 0 ? Colors.success : Colors.error },
-                        ]}
-                      >
-                        {b.net >= 0
-                          ? `Gets back ${formatCurrency(b.net)}`
-                          : `Owes ${formatCurrency(Math.abs(b.net))}`}
-                      </Text>
+                      {isGuest ? (
+                        <Text style={[styles.netText, { color: Colors.textSecondary }]}>
+                          {b.totalPaid > 0
+                            ? `Paid ${formatCurrency(b.totalPaid)} · Share charged to host`
+                            : "Charged to host"}
+                        </Text>
+                      ) : b.net === 0 ? (
+                        <Text style={[styles.netText, { color: Colors.success }]}>
+                          Settled
+                        </Text>
+                      ) : (
+                        <Text
+                          style={[
+                            styles.netText,
+                            { color: b.net > 0 ? Colors.success : Colors.error },
+                          ]}
+                        >
+                          {b.net > 0
+                            ? `Gets back ${formatCurrency(b.net)}`
+                            : `Owes ${formatCurrency(Math.abs(b.net))}`}
+                        </Text>
+                      )}
                     </View>
                   </View>
                 );
@@ -294,25 +311,24 @@ export default function OrderSummary() {
           <Text style={styles.sectionTitle}>Settlements</Text>
           <View style={styles.card}>
             {result.debts.map((d, i) => {
-              const fromName = result.breakdowns.find(
-                (b) => b.userId === d.fromUserId
-              );
-              const toName = result.breakdowns.find(
-                (b) => b.userId === d.toUserId
-              );
+              const resolveDebtName = (id: string) => {
+                if (id.startsWith("guest:")) {
+                  const guestId = id.replace("guest:", "");
+                  const guestP = participants?.find((p) => p.guest_id === guestId);
+                  return (guestP?.guests?.name ?? "Guest") + " (Guest)";
+                }
+                const b = result.breakdowns.find((b) => b.userId === id);
+                return b ? getParticipantName(b.participantId) : "Unknown";
+              };
               return (
                 <View key={i} style={styles.settlementRow}>
                   <View style={styles.settlementArrow}>
                     <Text style={styles.settlementFrom}>
-                      {fromName
-                        ? getParticipantName(fromName.participantId)
-                        : "Unknown"}
+                      {resolveDebtName(d.fromUserId)}
                     </Text>
                     <Text style={styles.settlementArrowText}>→</Text>
                     <Text style={styles.settlementTo}>
-                      {toName
-                        ? getParticipantName(toName.participantId)
-                        : "Unknown"}
+                      {resolveDebtName(d.toUserId)}
                     </Text>
                   </View>
                   <Text style={styles.settlementAmount}>

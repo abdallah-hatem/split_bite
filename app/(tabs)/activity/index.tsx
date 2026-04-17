@@ -128,9 +128,9 @@ export default function ActivityScreen() {
           />
         ) : null
       }
-      renderItem={({ item }) => (
-        <EntryRow entry={item} userId={user!.id} />
-      )}
+      renderItem={({ item }) =>
+        user ? <EntryRow entry={item} userId={user.id} /> : null
+      }
     />
   );
 }

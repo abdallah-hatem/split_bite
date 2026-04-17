@@ -73,7 +73,12 @@ function handleNotificationTap(data?: Record<string, unknown>) {
       }
       break;
     case "settlement":
-      router.push("/(tabs)/activity" as any);
+    case "settlement_request":
+      if (groupId) {
+        router.push(`/(tabs)/groups/${groupId}/balances` as any);
+      } else {
+        router.push("/(tabs)/activity" as any);
+      }
       break;
     default:
       router.push("/(tabs)/groups" as any);

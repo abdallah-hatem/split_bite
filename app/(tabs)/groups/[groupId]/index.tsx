@@ -134,8 +134,8 @@ export default function GroupDetail() {
                 .delete()
                 .eq("id", groupId);
               if (error) throw error;
-              await queryClient.invalidateQueries({ queryKey: groupKeys.all });
-              await queryClient.refetchQueries({ queryKey: groupKeys.all });
+              queryClient.invalidateQueries({ queryKey: groupKeys.all });
+              router.dismissAll();
               router.replace("/(tabs)/groups");
             } catch (error: any) {
               Alert.alert("Error", error.message);

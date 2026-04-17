@@ -119,7 +119,7 @@ create table public.order_participants (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id) on delete cascade,
   user_id uuid references public.profiles(id),
-  guest_id uuid references public.guests(id),
+  guest_id uuid references public.guests(id) on delete cascade,
   is_included boolean not null default true,
   created_at timestamptz not null default now(),
   check (
