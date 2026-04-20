@@ -1,5 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { supabase } from "@/src/lib/supabase";
+import { useAuth } from "@/src/providers/AuthProvider";
 
 export type LedgerEntry = {
   id: string;
@@ -20,8 +21,10 @@ export type LedgerEntry = {
 const ACTIVITY_PAGE_SIZE = 15;
 
 export function useActivityFeed() {
+  const { user } = useAuth();
   return useInfiniteQuery({
-    queryKey: ["activity"],
+    queryKey: ["activity", user?.id],
+    enabled: !!user,
     queryFn: async ({ pageParam = 0 }) => {
       const { data, error } = await supabase
         .from("ledger_entries")

@@ -92,7 +92,8 @@ export default function ActivityScreen() {
     setPullRefreshing(false);
   };
 
-  if (isLoading) {
+  // Only show loading on initial load when no data yet
+  if (isLoading && entries.length === 0) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={Colors.primary} />

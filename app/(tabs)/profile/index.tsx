@@ -26,18 +26,26 @@ export default function ProfileScreen() {
   }, [user]);
 
   const fetchProfile = async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("profiles")
-      .select("display_name")
-      .eq("id", user.id)
-      .single();
-
-    if (data) {
-      setDisplayName(data.display_name);
-      setOriginalName(data.display_name);
+    if (!user) {
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .single();
+
+      if (data) {
+        setDisplayName(data.display_name);
+        setOriginalName(data.display_name);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSave = async () => {
