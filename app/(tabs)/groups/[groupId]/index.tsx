@@ -129,11 +129,15 @@ export default function GroupDetail() {
           style: "destructive",
           onPress: async () => {
             try {
-              const { error } = await supabase
+              const { data, error } = await supabase
                 .from("groups")
                 .delete()
-                .eq("id", groupId);
+                .eq("id", groupId)
+                .select();
               if (error) throw error;
+              if (!data || data.length === 0) {
+                throw new Error("You don't have permission to delete this group");
+              }
               queryClient.invalidateQueries({ queryKey: groupKeys.all });
               router.dismissAll();
               router.replace("/(tabs)/groups");
