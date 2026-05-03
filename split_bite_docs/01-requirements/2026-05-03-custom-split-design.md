@@ -63,10 +63,9 @@ Tapping **Custom split** opens a sheet that lets the user (a) pick people *and* 
 
 ### Editing an Existing Item
 
-When the user opens the editor for an existing item, the assignment selector remembers the previous mode:
+**Out of scope for this iteration.** The current Edit Item modal (today, before this change) only edits `name` and `price` — it does not let the user change who is on an item. Adding assignment-editing AND custom-split editing in one go would bloat this change.
 
-- If the item was saved as Custom split, the selector is set to **Custom split** and the existing weights pre-populate the inputs.
-- The user can switch modes freely (e.g. Custom → Equal). On save, the new mode's shares overwrite the old `item_shares` rows — no version history kept.
+Path forward: ship Custom split in the **add-item** flow now. A follow-up task can introduce assignment-editing (and at the same time bring Custom-split-on-edit). Tracked separately.
 
 ---
 

@@ -26,6 +26,7 @@ import {
   CalcPayment,
 } from "@/src/utils/calculations";
 import { formatCurrency } from "@/src/utils/currency";
+import { formatShareLabels } from "@/src/utils/itemShares";
 import { notifyOrderFinalized } from "@/src/utils/notifications";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
@@ -330,19 +331,17 @@ export default function FinalizeScreen() {
           // Resolve who this item belongs to from the original items data
           const origItem = items?.find((i) => i.id === item.id) as any;
           const itemShares = origItem?.item_shares ?? [];
-          const shareNames = itemShares
-            .map((s: any) => {
-              const p = participants?.find((p: any) => p.id === s.participant_id);
-              return p?.profiles?.display_name ?? p?.guests?.name ?? null;
-            })
-            .filter(Boolean);
+          const shareLabels = formatShareLabels(itemShares, (pid) => {
+            const p = participants?.find((p: any) => p.id === pid);
+            return p?.profiles?.display_name ?? p?.guests?.name ?? null;
+          });
 
           const addedByName =
             origItem?.added_by?.profiles?.display_name ??
             origItem?.added_by?.guests?.name ??
             null;
 
-          const isSharedItem = shareNames.length > 1;
+          const isSharedItem = shareLabels.length > 1;
 
           return (
           <View key={item.id} style={styles.itemRow}>
@@ -350,7 +349,7 @@ export default function FinalizeScreen() {
               <Text style={styles.itemName}>{item.name}</Text>
               {isSharedItem ? (
                 <Text style={styles.sharedTag}>
-                  Split: {shareNames.join(", ")}
+                  Split: {shareLabels.join(", ")}
                 </Text>
               ) : addedByName ? (
                 <Text style={styles.addedByTag}>{addedByName}</Text>
@@ -502,7 +501,7 @@ export default function FinalizeScreen() {
           <View style={styles.previewSection}>
             <Text style={styles.sectionTitle}>Preview</Text>
             {preview.breakdowns
-              .filter((b) => b.totalOwed > 0)
+              .filter((b) => b.totalOwed > 0 || b.totalPaid > 0)
               .map((b) => {
                 const p = participants?.find(
                   (p) => p.id === b.participantId
@@ -524,13 +523,7 @@ export default function FinalizeScreen() {
                           Paid: {formatCurrency(b.totalPaid)}
                         </Text>
                       )}
-                      {isGuest ? (
-                        <Text style={[styles.previewNet, { color: Colors.textSecondary }]}>
-                          {b.totalPaid > 0
-                            ? `Paid ${formatCurrency(b.totalPaid)} · Share charged to host`
-                            : "Charged to host"}
-                        </Text>
-                      ) : b.net === 0 ? (
+                      {b.net === 0 ? (
                         <Text style={[styles.previewNet, { color: Colors.success }]}>
                           Settled
                         </Text>
@@ -646,12 +639,12 @@ const styles = StyleSheet.create({
   previewPaid: { fontSize: FontSize.sm, color: Colors.textSecondary },
   previewNet: { fontSize: FontSize.sm, fontWeight: "600", marginTop: 2 },
   settlementsSection: { marginTop: Spacing.lg, backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border },
-  settlementRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  settlementArrow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, flex: 1 },
-  settlementFrom: { fontSize: FontSize.md, color: Colors.error, fontWeight: "500" },
+  settlementRow: { flexDirection: "column", gap: Spacing.xs, paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  settlementArrow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, flexWrap: "wrap" },
+  settlementFrom: { fontSize: FontSize.md, color: Colors.error, fontWeight: "500", flexShrink: 1 },
   settlementArrowText: { fontSize: FontSize.lg, color: Colors.textTertiary },
-  settlementTo: { fontSize: FontSize.md, color: Colors.success, fontWeight: "500" },
-  settlementAmount: { fontSize: FontSize.md, fontWeight: "700", color: Colors.text },
+  settlementTo: { fontSize: FontSize.md, color: Colors.success, fontWeight: "500", flexShrink: 1 },
+  settlementAmount: { fontSize: FontSize.md, fontWeight: "700", color: Colors.text, alignSelf: "flex-end" },
   allSettledText: { fontSize: FontSize.md, fontWeight: "600", color: Colors.success, textAlign: "center" },
   finalizeButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center", marginTop: Spacing.xl },
   finalizeText: { color: "#FFFFFF", fontSize: FontSize.md, fontWeight: "600" },

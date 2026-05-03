@@ -28,6 +28,7 @@ import {
   useUpdateItem,
 } from "@/src/hooks/useOrders";
 import { useRealtimeOrder, useRealtimeItems } from "@/src/hooks/useRealtimeOrder";
+import { formatShareLabels } from "@/src/utils/itemShares";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 function AddItemModal({
@@ -51,6 +52,9 @@ function AddItemModal({
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(
     new Set([participantId])
   );
+  const [splitMode, setSplitMode] = useState<"equal" | "custom">("equal");
+  // Per-participant weights (string state to allow blank/decimal entry)
+  const [weights, setWeights] = useState<Record<string, string>>({});
   const addItem = useAddItem();
 
   const toggleParticipant = (pid: string) => {
@@ -61,6 +65,10 @@ function AddItemModal({
         if (next.size > 1) next.delete(pid);
       } else {
         next.add(pid);
+        // In custom mode, default new selections to weight 1
+        if (splitMode === "custom") {
+          setWeights((w) => ({ ...w, [pid]: w[pid] ?? "1" }));
+        }
       }
       return next;
     });
@@ -68,11 +76,31 @@ function AddItemModal({
 
   const selectAll = () => {
     setSelectedParticipants(new Set(participants.map((p) => p.id)));
+    setSplitMode("equal");
   };
 
   const selectOnlyMe = () => {
     setSelectedParticipants(new Set([participantId]));
+    setSplitMode("equal");
   };
+
+  const enterCustomMode = () => {
+    setSplitMode("custom");
+    // Seed weights = 1 for everyone currently selected
+    setWeights((w) => {
+      const next = { ...w };
+      for (const pid of selectedParticipants) {
+        if (next[pid] === undefined) next[pid] = "1";
+      }
+      return next;
+    });
+  };
+
+  // Sum of weights for currently selected participants (custom mode)
+  const totalWeight = Array.from(selectedParticipants).reduce(
+    (s, pid) => s + (parseFloat(weights[pid] ?? "0") || 0),
+    0
+  );
 
   const handleAdd = async () => {
     if (!name.trim()) {
@@ -88,18 +116,41 @@ function AddItemModal({
         ? participantId
         : selected[0];
 
-      await addItem.mutateAsync({
-        orderId,
-        name: name.trim(),
-        price: price ? parseFloat(price) : null,
-        quantity: 1,
-        isShared,
-        participantId: ownerId,
-        sharedWith: isShared ? selected : undefined,
-      });
+      if (splitMode === "custom" && isShared) {
+        if (totalWeight <= 0) {
+          Alert.alert("Error", "Set at least one weight above 0");
+          return;
+        }
+        const customWeights = selected.map((pid) => ({
+          participantId: pid,
+          weight: parseFloat(weights[pid] ?? "0") || 0,
+        }));
+        await addItem.mutateAsync({
+          orderId,
+          name: name.trim(),
+          price: price ? parseFloat(price) : null,
+          quantity: 1,
+          isShared,
+          participantId: ownerId,
+          customWeights,
+        });
+      } else {
+        await addItem.mutateAsync({
+          orderId,
+          name: name.trim(),
+          price: price ? parseFloat(price) : null,
+          quantity: 1,
+          isShared,
+          participantId: ownerId,
+          sharedWith: isShared ? selected : undefined,
+        });
+      }
+
       setName("");
       setPrice("");
       setSelectedParticipants(new Set([participantId]));
+      setSplitMode("equal");
+      setWeights({});
       onClose();
     } catch (error: any) {
       Alert.alert("Error", error.message);
@@ -162,7 +213,8 @@ function AddItemModal({
                 <TouchableOpacity
                   style={[
                     modalStyles.quickAction,
-                    selectedParticipants.size === 1 &&
+                    splitMode === "equal" &&
+                      selectedParticipants.size === 1 &&
                       selectedParticipants.has(participantId) &&
                       modalStyles.quickActionActive,
                   ]}
@@ -171,7 +223,8 @@ function AddItemModal({
                   <Text
                     style={[
                       modalStyles.quickActionText,
-                      selectedParticipants.size === 1 &&
+                      splitMode === "equal" &&
+                        selectedParticipants.size === 1 &&
                         selectedParticipants.has(participantId) &&
                         modalStyles.quickActionTextActive,
                     ]}
@@ -182,7 +235,8 @@ function AddItemModal({
                 <TouchableOpacity
                   style={[
                     modalStyles.quickAction,
-                    selectedParticipants.size === participants.length &&
+                    splitMode === "equal" &&
+                      selectedParticipants.size === participants.length &&
                       modalStyles.quickActionActive,
                   ]}
                   onPress={selectAll}
@@ -190,14 +244,39 @@ function AddItemModal({
                   <Text
                     style={[
                       modalStyles.quickActionText,
-                      selectedParticipants.size === participants.length &&
+                      splitMode === "equal" &&
+                        selectedParticipants.size === participants.length &&
                         modalStyles.quickActionTextActive,
                     ]}
                   >
                     Everyone
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    modalStyles.quickAction,
+                    splitMode === "custom" && modalStyles.quickActionActive,
+                  ]}
+                  onPress={enterCustomMode}
+                >
+                  <Text
+                    style={[
+                      modalStyles.quickActionText,
+                      splitMode === "custom" &&
+                        modalStyles.quickActionTextActive,
+                    ]}
+                  >
+                    Custom split
+                  </Text>
+                </TouchableOpacity>
               </View>
+
+              {splitMode === "custom" && (
+                <Text style={modalStyles.helpText}>
+                  Pick people and set a weight per person. Higher weight = larger
+                  share.
+                </Text>
+              )}
 
               {/* Participant list */}
               <View style={modalStyles.participantList}>
@@ -208,28 +287,68 @@ function AddItemModal({
                     "Unknown";
                   const isMe = p.id === participantId;
                   const selected = selectedParticipants.has(p.id);
+                  const weight = parseFloat(weights[p.id] ?? "0") || 0;
+                  const pct =
+                    splitMode === "custom" && selected && totalWeight > 0
+                      ? Math.round((weight / totalWeight) * 1000) / 10
+                      : null;
                   return (
-                    <TouchableOpacity
+                    <View
                       key={p.id}
                       style={[
                         modalStyles.participantRow,
                         selected && modalStyles.participantRowSelected,
                       ]}
-                      onPress={() => toggleParticipant(p.id)}
                     >
-                      <View
-                        style={[
-                          modalStyles.checkbox,
-                          selected && modalStyles.checkboxChecked,
-                        ]}
-                      />
-                      <Text style={modalStyles.participantName}>
-                        {pName}{isMe ? " (you)" : ""}
-                      </Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => toggleParticipant(p.id)}
+                        style={modalStyles.participantTapTarget}
+                      >
+                        <View
+                          style={[
+                            modalStyles.checkbox,
+                            selected && modalStyles.checkboxChecked,
+                          ]}
+                        />
+                        <Text style={modalStyles.participantName}>
+                          {pName}
+                          {isMe ? " (you)" : ""}
+                        </Text>
+                      </TouchableOpacity>
+                      {splitMode === "custom" && selected && (
+                        <View style={modalStyles.weightWrap}>
+                          <TextInput
+                            style={modalStyles.weightInput}
+                            keyboardType="decimal-pad"
+                            value={weights[p.id] ?? ""}
+                            onChangeText={(v) =>
+                              setWeights((w) => ({ ...w, [p.id]: v }))
+                            }
+                            placeholder="1"
+                            placeholderTextColor={Colors.textTertiary}
+                          />
+                          <Text style={modalStyles.weightPct}>
+                            {pct !== null ? `${pct}%` : "—"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   );
                 })}
               </View>
+
+              {splitMode === "custom" && (
+                <Text
+                  style={[
+                    modalStyles.totalWeight,
+                    totalWeight <= 0 && { color: Colors.error },
+                  ]}
+                >
+                  {totalWeight > 0
+                    ? `Total weight ${totalWeight} — covers 100%`
+                    : "Set at least one weight above 0"}
+                </Text>
+              )}
             </>
           )}
           <View style={{ height: 40 }} />
@@ -542,16 +661,15 @@ export default function OrderDetail() {
             (item.added_by as any)?.guests?.name ??
             null;
 
-          const shareNames = (item.item_shares ?? [])
-            .map((s) => {
-              const p = participants?.find(
-                (p) => p.id === s.participant_id
-              );
+          const shareLabels = formatShareLabels(
+            item.item_shares ?? [],
+            (pid) => {
+              const p = participants?.find((p) => p.id === pid);
               return p?.profiles?.display_name ?? p?.guests?.name ?? null;
-            })
-            .filter(Boolean);
+            }
+          );
 
-          const isSharedItem = shareNames.length > 1;
+          const isSharedItem = shareLabels.length > 1;
 
           return (
             <TouchableOpacity
@@ -563,7 +681,7 @@ export default function OrderDetail() {
                 <Text style={styles.itemName}>{item.name}</Text>
                 {isSharedItem ? (
                   <Text style={styles.sharedLabel}>
-                    Split: {shareNames.join(", ")}
+                    Split: {shareLabels.join(", ")}
                   </Text>
                 ) : addedByName ? (
                   <Text style={styles.addedByLabel}>{addedByName}</Text>
@@ -767,17 +885,23 @@ const modalStyles = StyleSheet.create({
   label: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.text, marginTop: Spacing.md, marginBottom: Spacing.xs },
   subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
   input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.md, fontSize: FontSize.md, color: Colors.text },
-  quickActions: { flexDirection: "row", gap: Spacing.xs, marginTop: Spacing.xs, marginBottom: Spacing.sm },
+  quickActions: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs, marginTop: Spacing.xs, marginBottom: Spacing.sm },
   quickAction: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
   quickActionActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + "15" },
   quickActionText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: "500" },
   quickActionTextActive: { color: Colors.primary, fontWeight: "600" },
+  helpText: { fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: Spacing.xs },
   participantList: { marginTop: Spacing.sm, gap: Spacing.xs },
   participantRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, padding: Spacing.sm, borderRadius: BorderRadius.sm, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   participantRowSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + "10" },
+  participantTapTarget: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, flex: 1 },
   participantName: { fontSize: FontSize.md, color: Colors.text },
   checkbox: { width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: Colors.border },
   checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  weightWrap: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
+  weightInput: { width: 56, paddingVertical: 6, paddingHorizontal: Spacing.sm, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background, fontSize: FontSize.md, color: Colors.text, textAlign: "center" },
+  weightPct: { fontSize: FontSize.xs, color: Colors.textSecondary, minWidth: 38, textAlign: "right" },
+  totalWeight: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: Spacing.sm, fontStyle: "italic" },
 });
 
 const styles = StyleSheet.create({

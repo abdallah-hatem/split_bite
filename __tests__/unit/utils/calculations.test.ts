@@ -66,6 +66,24 @@ function makeSharedItem(
   };
 }
 
+function makeWeightedItem(
+  id: string,
+  price: number,
+  weights: { participantId: string; weight: number }[],
+  quantity = 1
+): CalcItem {
+  const total = weights.reduce((s, w) => s + w.weight, 0);
+  return {
+    id,
+    price,
+    quantity,
+    shares: weights.map((w) => ({
+      participantId: w.participantId,
+      fraction: w.weight / total,
+    })),
+  };
+}
+
 // Helper to verify total owed sums to actualTotal
 function expectTotalOwedEquals(result: any, expected: number) {
   const total = result.breakdowns.reduce(
@@ -181,6 +199,107 @@ describe("Calculation Engine", () => {
       expect(result.breakdowns.find((b) => b.participantId === "p1")!.totalOwed).toBe(50);
       expect(result.breakdowns.find((b) => b.participantId === "p2")!.totalOwed).toBe(50);
       expect(result.breakdowns.find((b) => b.participantId === "p3")!.totalOwed).toBe(0);
+    });
+  });
+
+  // ===========================================
+  // CUSTOM (NON-EQUAL) SPLITS
+  // ===========================================
+  describe("Custom (non-equal) splits", () => {
+    it("100 EGP item split 1:1:2 → 25 / 25 / 50", () => {
+      const result = calculateSplit(
+        makeInput({
+          participants: [
+            makeParticipant("p1"),
+            makeParticipant("p2"),
+            makeParticipant("p3"),
+          ],
+          items: [
+            makeWeightedItem("i1", 100, [
+              { participantId: "p1", weight: 1 },
+              { participantId: "p2", weight: 1 },
+              { participantId: "p3", weight: 2 },
+            ]),
+          ],
+          payments: [{ participantId: "p1", amount: 100 }],
+          actualTotal: 100,
+        })
+      );
+      expect(result.breakdowns.find((b) => b.participantId === "p1")!.totalOwed).toBe(25);
+      expect(result.breakdowns.find((b) => b.participantId === "p2")!.totalOwed).toBe(25);
+      expect(result.breakdowns.find((b) => b.participantId === "p3")!.totalOwed).toBe(50);
+    });
+
+    it("30 EGP item split 1:2 → 10 / 20", () => {
+      const result = calculateSplit(
+        makeInput({
+          participants: [makeParticipant("p1"), makeParticipant("p2")],
+          items: [
+            makeWeightedItem("i1", 30, [
+              { participantId: "p1", weight: 1 },
+              { participantId: "p2", weight: 2 },
+            ]),
+          ],
+          payments: [{ participantId: "p1", amount: 30 }],
+          actualTotal: 30,
+        })
+      );
+      expect(result.breakdowns.find((b) => b.participantId === "p1")!.totalOwed).toBe(10);
+      expect(result.breakdowns.find((b) => b.participantId === "p2")!.totalOwed).toBe(20);
+    });
+
+    it("decimal weights normalise the same way (0.5:0.5:1 == 1:1:2)", () => {
+      const result = calculateSplit(
+        makeInput({
+          participants: [
+            makeParticipant("p1"),
+            makeParticipant("p2"),
+            makeParticipant("p3"),
+          ],
+          items: [
+            makeWeightedItem("i1", 100, [
+              { participantId: "p1", weight: 0.5 },
+              { participantId: "p2", weight: 0.5 },
+              { participantId: "p3", weight: 1 },
+            ]),
+          ],
+          payments: [{ participantId: "p1", amount: 100 }],
+          actualTotal: 100,
+        })
+      );
+      expect(result.breakdowns.find((b) => b.participantId === "p1")!.totalOwed).toBe(25);
+      expect(result.breakdowns.find((b) => b.participantId === "p2")!.totalOwed).toBe(25);
+      expect(result.breakdowns.find((b) => b.participantId === "p3")!.totalOwed).toBe(50);
+    });
+
+    it("mix of equal-shared item and a custom-shared item", () => {
+      const result = calculateSplit(
+        makeInput({
+          participants: [
+            makeParticipant("p1"),
+            makeParticipant("p2"),
+            makeParticipant("p3"),
+          ],
+          items: [
+            // Equal split appetiser 30 EGP
+            makeSharedItem("i1", 30, ["p1", "p2", "p3"]),
+            // Custom split main 60 EGP, 1:2:3 (10/20/30)
+            makeWeightedItem("i2", 60, [
+              { participantId: "p1", weight: 1 },
+              { participantId: "p2", weight: 2 },
+              { participantId: "p3", weight: 3 },
+            ]),
+          ],
+          payments: [{ participantId: "p1", amount: 90 }],
+          actualTotal: 90,
+        })
+      );
+      // p1: 10 (appetiser) + 10 (main) = 20
+      // p2: 10 + 20 = 30
+      // p3: 10 + 30 = 40
+      expect(result.breakdowns.find((b) => b.participantId === "p1")!.totalOwed).toBe(20);
+      expect(result.breakdowns.find((b) => b.participantId === "p2")!.totalOwed).toBe(30);
+      expect(result.breakdowns.find((b) => b.participantId === "p3")!.totalOwed).toBe(40);
     });
   });
 
@@ -445,10 +564,10 @@ describe("Calculation Engine", () => {
   });
 
   // ===========================================
-  // GUEST HANDLING
+  // GUESTS — first-class participants (direct settlement)
   // ===========================================
-  describe("Guest handling", () => {
-    it("guest debt transfers to host", () => {
+  describe("Guests (direct settlement)", () => {
+    it("host pays for guest who didn't pay → guest owes host directly", () => {
       const result = calculateSplit(
         makeInput({
           participants: [
@@ -462,19 +581,17 @@ describe("Calculation Engine", () => {
       );
       const host = result.breakdowns.find((b) => b.userId === "u1")!;
       const guest = result.breakdowns.find((b) => b.guestId === "g1")!;
-      expect(host.net).toBe(0);
-      expect(guest.net).toBe(0);
-      // Inter-user debts: none (host paid everything)
-      const userDebts = result.debts.filter((d) => !d.fromUserId.startsWith("guest:") && !d.toUserId.startsWith("guest:"));
-      expect(userDebts).toHaveLength(0);
-      // Guest settlement: guest owes host 50
-      const guestDebts = result.debts.filter((d) => d.fromUserId.startsWith("guest:") || d.toUserId.startsWith("guest:"));
-      expect(guestDebts).toHaveLength(1);
-      expect(guestDebts[0].fromUserId).toBe("guest:g1");
-      expect(guestDebts[0].amount).toBe(50);
+      // Direct nets — no host transfer.
+      expect(host.net).toBe(50);
+      expect(guest.net).toBe(-50);
+      // Single debt: guest → host.
+      expect(result.debts).toHaveLength(1);
+      expect(result.debts[0].fromUserId).toBe("guest:g1");
+      expect(result.debts[0].toUserId).toBe("u1");
+      expect(result.debts[0].amount).toBe(50);
     });
 
-    it("guest debt transfers to host who didnt pay → host owes payer + guest owes host", () => {
+    it("payer is a third user → host and guest each owe payer directly", () => {
       const result = calculateSplit(
         makeInput({
           participants: [
@@ -491,15 +608,17 @@ describe("Calculation Engine", () => {
           actualTotal: 100,
         })
       );
-      // Inter-user: u1 → u2 = 60
-      const userDebts = result.debts.filter((d) => !d.fromUserId.startsWith("guest:") && !d.toUserId.startsWith("guest:"));
-      expect(userDebts).toHaveLength(1);
-      expect(userDebts[0].fromUserId).toBe("u1");
-      expect(userDebts[0].toUserId).toBe("u2");
-      expect(userDebts[0].amount).toBe(60);
+      // Net: u1 -30, u2 +60, g1 -30. Both u1 and g1 pay u2 directly.
+      expect(result.debts).toHaveLength(2);
+      const u1Debt = result.debts.find((d) => d.fromUserId === "u1");
+      const guestDebt = result.debts.find((d) => d.fromUserId === "guest:g1");
+      expect(u1Debt?.toUserId).toBe("u2");
+      expect(u1Debt?.amount).toBe(30);
+      expect(guestDebt?.toUserId).toBe("u2");
+      expect(guestDebt?.amount).toBe(30);
     });
 
-    it("multiple guests on same host → host owes payer, guests owe host", () => {
+    it("multiple guests on same host → each guest pays the payer directly", () => {
       const result = calculateSplit(
         makeInput({
           participants: [
@@ -518,13 +637,17 @@ describe("Calculation Engine", () => {
           actualTotal: 100,
         })
       );
-      const userDebts = result.debts.filter((d) => !d.fromUserId.startsWith("guest:") && !d.toUserId.startsWith("guest:"));
-      expect(userDebts).toHaveLength(1);
-      expect(userDebts[0].fromUserId).toBe("u1");
-      expect(userDebts[0].amount).toBe(75);
+      // Net: u1 -25, u2 +75, g1 -25, g2 -25. Three debtors → one creditor (u2).
+      expect(result.debts).toHaveLength(3);
+      const total = result.debts.reduce((s, d) => s + d.amount, 0);
+      expect(total).toBe(75);
+      for (const d of result.debts) {
+        expect(d.toUserId).toBe("u2");
+        expect(d.amount).toBe(25);
+      }
     });
 
-    it("guest with shared items → host responsible for guest share", () => {
+    it("guest sharing an item → guest owes payer their share directly", () => {
       const result = calculateSplit(
         makeInput({
           participants: [
@@ -539,14 +662,17 @@ describe("Calculation Engine", () => {
           actualTotal: 90,
         })
       );
-      const userDebts = result.debts.filter((d) => !d.fromUserId.startsWith("guest:") && !d.toUserId.startsWith("guest:"));
-      expect(userDebts).toHaveLength(1);
-      expect(userDebts[0].fromUserId).toBe("u1");
-      expect(userDebts[0].toUserId).toBe("u2");
-      expect(userDebts[0].amount).toBe(60);
+      // Each owes 30. u1 -30, u2 +60, g1 -30. Two direct debts → u2.
+      expect(result.debts).toHaveLength(2);
+      const u1Debt = result.debts.find((d) => d.fromUserId === "u1");
+      const guestDebt = result.debts.find((d) => d.fromUserId === "guest:guest1");
+      expect(u1Debt?.toUserId).toBe("u2");
+      expect(u1Debt?.amount).toBe(30);
+      expect(guestDebt?.toUserId).toBe("u2");
+      expect(guestDebt?.amount).toBe(30);
     });
 
-    it("guest + delivery → guest's delivery share goes to host", () => {
+    it("guest + delivery → guest pays their delivery share directly to payer", () => {
       const result = calculateSplit(
         makeInput({
           participants: [
@@ -564,15 +690,16 @@ describe("Calculation Engine", () => {
           delivery: 30,
         })
       );
-      const userDebts = result.debts.filter((d) => !d.fromUserId.startsWith("guest:") && !d.toUserId.startsWith("guest:"));
-      expect(userDebts).toHaveLength(1);
-      expect(userDebts[0].fromUserId).toBe("u1");
-      expect(userDebts[0].toUserId).toBe("u2");
-      expect(userDebts[0].amount).toBe(220);
+      // Each owes 110 (100 item + 10 delivery). u2 paid 330 → +220.
+      expect(result.debts).toHaveLength(2);
+      const u1Debt = result.debts.find((d) => d.fromUserId === "u1");
+      const guestDebt = result.debts.find((d) => d.fromUserId === "guest:guest1");
+      expect(u1Debt?.amount).toBe(110);
+      expect(guestDebt?.amount).toBe(110);
       expectTotalOwedEquals(result, 330);
     });
 
-    it("two hosts with guests", () => {
+    it("two hosts each with one guest → 3 direct debts to the payer", () => {
       const result = calculateSplit(
         makeInput({
           participants: [
@@ -591,14 +718,15 @@ describe("Calculation Engine", () => {
           actualTotal: 200,
         })
       );
-      const userDebts = result.debts.filter((d) => !d.fromUserId.startsWith("guest:") && !d.toUserId.startsWith("guest:"));
-      expect(userDebts).toHaveLength(1);
-      expect(userDebts[0].fromUserId).toBe("u2");
-      expect(userDebts[0].toUserId).toBe("u1");
-      expect(userDebts[0].amount).toBe(100);
+      // u1 +150, g1 -50, u2 -50, g2 -50. All three debtors → u1.
+      expect(result.debts).toHaveLength(3);
+      for (const d of result.debts) {
+        expect(d.toUserId).toBe("u1");
+        expect(d.amount).toBe(50);
+      }
     });
 
-    it("guest who overpaid → host owes guest back", () => {
+    it("guest who overpaid → host owes guest directly", () => {
       const result = calculateSplit(
         makeInput({
           participants: [
@@ -617,17 +745,52 @@ describe("Calculation Engine", () => {
           delivery: 20,
         })
       );
-      // guest owes 104, paid 320 → overpaid 216
-      // host owes 416, paid 200 → underpaid 216
-      // Settlement: host owes guest 216
-      const guestDebts = result.debts.filter((d) => d.toUserId.startsWith("guest:"));
-      expect(guestDebts).toHaveLength(1);
-      expect(guestDebts[0].fromUserId).toBe("u1");
-      expect(guestDebts[0].toUserId).toBe("guest:guest1");
-      expect(guestDebts[0].amount).toBeCloseTo(216, 0);
+      // guest owes 104, paid 320 → +216
+      // host owes 416, paid 200 → -216
+      expect(result.debts).toHaveLength(1);
+      expect(result.debts[0].fromUserId).toBe("u1");
+      expect(result.debts[0].toUserId).toBe("guest:guest1");
+      expect(result.debts[0].amount).toBeCloseTo(216, 0);
     });
 
-    it("guest who is assigned no items → zero debt to host", () => {
+    it("guest who paid but ordered nothing → other participants owe guest directly (Apr review fix)", () => {
+      // Mirrors the bug from a real user screenshot:
+      // bodz + Guest 1 share items, Guest 2 paid but ordered nothing.
+      // Guest 2 should be visible AND be the recipient of others' payments.
+      const result = calculateSplit(
+        makeInput({
+          participants: [
+            makeParticipant("p1", "u1"), // bodz
+            makeGuest("p2", "g1", "u1"), // Guest 1 (host = bodz)
+            makeGuest("p3", "g2", "u1"), // Guest 2 (host = bodz, paid but no items)
+          ],
+          items: [
+            makeSharedItem("i1", 100, ["p1", "p2"]), // bodz + Guest 1 split equally
+          ],
+          payments: [
+            { participantId: "p2", amount: 30 }, // Guest 1 paid 30
+            { participantId: "p3", amount: 70 }, // Guest 2 paid 70 (overpaid)
+          ],
+          actualTotal: 100,
+        })
+      );
+      // Each of bodz/Guest 1 owes 50.
+      // bodz: paid 0 → -50; Guest 1: paid 30 → -20; Guest 2: paid 70 → +70.
+      const bodz = result.breakdowns.find((b) => b.userId === "u1")!;
+      const g1 = result.breakdowns.find((b) => b.guestId === "g1")!;
+      const g2 = result.breakdowns.find((b) => b.guestId === "g2")!;
+      expect(bodz.net).toBe(-50);
+      expect(g1.net).toBe(-20);
+      expect(g2.net).toBe(70);
+      // Guest 2 (the only creditor) is the target of all settlements.
+      expect(result.debts.length).toBeGreaterThanOrEqual(2);
+      const totalToG2 = result.debts
+        .filter((d) => d.toUserId === "guest:g2")
+        .reduce((s, d) => s + d.amount, 0);
+      expect(totalToG2).toBe(70);
+    });
+
+    it("guest who is assigned no items and didn't pay → no debts involving guest", () => {
       const result = calculateSplit(
         makeInput({
           participants: [
@@ -645,8 +808,11 @@ describe("Calculation Engine", () => {
       );
       const guest = result.breakdowns.find((b) => b.guestId === "guest1")!;
       expect(guest.totalOwed).toBe(0);
+      expect(guest.net).toBe(0);
+      // Only u2 owes u1 — no guest involvement.
       expect(result.debts).toHaveLength(1);
       expect(result.debts[0].fromUserId).toBe("u2");
+      expect(result.debts[0].toUserId).toBe("u1");
       expect(result.debts[0].amount).toBe(50);
     });
   });

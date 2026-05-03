@@ -207,6 +207,7 @@ export function useAddItem() {
       isShared,
       participantId,
       sharedWith,
+      customWeights,
     }: {
       orderId: string;
       name: string;
@@ -214,7 +215,8 @@ export function useAddItem() {
       quantity: number;
       isShared: boolean;
       participantId: string;
-      sharedWith?: string[]; // participant IDs to split with
+      sharedWith?: string[]; // participant IDs to split equally
+      customWeights?: { participantId: string; weight: number }[]; // overrides sharedWith for non-equal splits
     }) => {
       const { data: item, error: itemError } = await supabase
         .from("items")
@@ -231,17 +233,31 @@ export function useAddItem() {
 
       if (itemError) throw itemError;
 
-      // Create item shares
-      const shareParticipants = sharedWith?.length
-        ? sharedWith
-        : [participantId];
-      const fraction = 1 / shareParticipants.length;
+      let shares: { item_id: string; participant_id: string; share_fraction: number }[];
 
-      const shares = shareParticipants.map((pid) => ({
-        item_id: item.id,
-        participant_id: pid,
-        share_fraction: fraction,
-      }));
+      if (customWeights && customWeights.length > 0) {
+        // Non-equal split: normalise weights → fractions summing to 1.0
+        const totalWeight = customWeights.reduce((s, w) => s + w.weight, 0);
+        if (totalWeight <= 0) {
+          throw new Error("Total weight must be greater than zero");
+        }
+        shares = customWeights.map((w) => ({
+          item_id: item.id,
+          participant_id: w.participantId,
+          share_fraction: w.weight / totalWeight,
+        }));
+      } else {
+        // Equal split (existing behaviour)
+        const shareParticipants = sharedWith?.length
+          ? sharedWith
+          : [participantId];
+        const fraction = 1 / shareParticipants.length;
+        shares = shareParticipants.map((pid) => ({
+          item_id: item.id,
+          participant_id: pid,
+          share_fraction: fraction,
+        }));
+      }
 
       const { error: sharesError } = await supabase
         .from("item_shares")
