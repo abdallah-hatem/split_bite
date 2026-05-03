@@ -51,8 +51,11 @@ Requires `expo-updates` installed and `runtimeVersion.policy: "appVersion"` in `
 ## App Store Connect
 - **App ID:** `com.leopepsi2.splitbite`
 - **Bundle ID:** `com.leopepsi2.splitbite`
+- **ASC App ID (`ascAppId`):** `6762308340` — required in `eas.json` for `eas build --auto-submit`
 - **Apple Team:** CN24UJRFFJ
 - **Account:** abdallahhatem36@gmail.com
+- **Support URL:** https://abdallah-hatem.github.io/split_bite/support.html
+- **Privacy URL:** https://abdallah-hatem.github.io/split_bite/privacy-policy.html
 
 ## Demo Account (for App Review)
 - Email: `abdallahhatem36@gmail.com`

@@ -25,7 +25,8 @@
     "production": {
       "ios": {
         "appleId": "abdallahhatem36@gmail.com",
-        "appleTeamId": "CN24UJRFFJ"
+        "appleTeamId": "CN24UJRFFJ",
+        "ascAppId": "6762308340"
       }
     }
   }
