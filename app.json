@@ -15,7 +15,7 @@
       "backgroundColor": "#4F46E5"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.leopepsi2.splitbite",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
