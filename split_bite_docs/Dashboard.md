@@ -1,8 +1,14 @@
 # SplitBite Dashboard
 
 ## Project Status
-**Current Phase:** MVP Complete — App Store build in progress
-**Last Updated:** 2026-04-17
+**Current Phase:** MVP Complete — App Store resubmission (iPhone-only)
+**Last Updated:** 2026-05-03
+
+## Recent
+- iPad resubmission: dropped iPad support after second iPad-specific rejection; final defensive fixes to AuthProvider/Profile/Activity.
+- Custom (non-equal) item split shipped (add-only); spec at `01-requirements/2026-05-03-custom-split-design.md`.
+- Guests now first-class participants: removed host-transfer in calc engine; preview/summary show guests with their own net; layout fix for Who Pays Who row.
+- `CLAUDE.md` created with strict git rule and project conventions.
 
 ---
 
