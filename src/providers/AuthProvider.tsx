@@ -18,10 +18,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setIsLoading(false);
-    });
+    let cancelled = false;
+
+    // Safety net: never let isLoading hang forever (e.g. SecureStore stall on iPad).
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setIsLoading(false);
+    }, 4000);
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (cancelled) return;
+        setSession(session);
+      })
+      .catch(() => {
+        // Ignore — we'll fall through to unauthenticated state.
+      })
+      .finally(() => {
+        if (cancelled) return;
+        clearTimeout(safetyTimer);
+        setIsLoading(false);
+      });
 
     const {
       data: { subscription },
@@ -29,7 +46,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string) => {

@@ -6,7 +6,6 @@ import {
   TextInput,
   StyleSheet,
   Alert,
-  ActivityIndicator,
 } from "react-native";
 import { useAuth } from "@/src/providers/AuthProvider";
 import { supabase } from "@/src/lib/supabase";
@@ -18,35 +17,29 @@ export default function ProfileScreen() {
   const [originalName, setOriginalName] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    fetchProfile();
-  }, [user]);
-
-  const fetchProfile = async () => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const { data } = await supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", user.id)
-        .single();
-
-      if (data) {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (cancelled || !data?.display_name) return;
         setDisplayName(data.display_name);
         setOriginalName(data.display_name);
+      } catch {
+        // Profile name is non-critical; UI already shows email and avatar.
       }
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const handleSave = async () => {
     const trimmed = displayName.trim();
@@ -161,21 +154,16 @@ export default function ProfileScreen() {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
+  const avatarLetter =
+    displayName?.[0]?.toUpperCase() ??
+    user?.email?.[0]?.toUpperCase() ??
+    "?";
 
   return (
     <View style={styles.container}>
       <View style={styles.avatarSection}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {displayName?.[0]?.toUpperCase() ?? "?"}
-          </Text>
+          <Text style={styles.avatarText}>{avatarLetter}</Text>
         </View>
 
         {editing ? (
@@ -211,7 +199,9 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <TouchableOpacity onPress={() => setEditing(true)}>
-            <Text style={styles.displayName}>{displayName}</Text>
+            <Text style={styles.displayName}>
+              {displayName || "Set your name"}
+            </Text>
             <Text style={styles.editHint}>Tap to edit</Text>
           </TouchableOpacity>
         )}
@@ -240,7 +230,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, padding: Spacing.lg },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: Colors.background },
   avatarSection: { alignItems: "center", marginTop: Spacing.lg, marginBottom: Spacing.xl },
   avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.primary, justifyContent: "center", alignItems: "center", marginBottom: Spacing.sm },
   avatarText: { color: "#FFFFFF", fontSize: FontSize.xxxl, fontWeight: "700" },

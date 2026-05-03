@@ -88,23 +88,19 @@ export default function ActivityScreen() {
 
   const onPullRefresh = async () => {
     setPullRefreshing(true);
-    await refetch();
-    setPullRefreshing(false);
+    try {
+      await refetch();
+    } finally {
+      setPullRefreshing(false);
+    }
   };
-
-  // Only show loading on initial load when no data yet
-  if (isLoading && entries.length === 0) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
 
   return (
     <FlatList
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={
+        entries.length === 0 ? styles.contentEmpty : styles.content
+      }
       data={entries}
       keyExtractor={(item) => item.id}
       onEndReached={() => hasNextPage && fetchNextPage()}
@@ -114,10 +110,16 @@ export default function ActivityScreen() {
       }
       ListEmptyComponent={
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No activity yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Your order splits and settlements will appear here
-          </Text>
+          {isLoading ? (
+            <ActivityIndicator size="large" color={Colors.primary} />
+          ) : (
+            <>
+              <Text style={styles.emptyTitle}>No activity yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Your order splits and settlements will appear here
+              </Text>
+            </>
+          )}
         </View>
       }
       ListFooterComponent={
@@ -139,7 +141,7 @@ export default function ActivityScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.lg, gap: Spacing.sm },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: Colors.background },
+  contentEmpty: { flexGrow: 1, padding: Spacing.lg },
   empty: { flex: 1, justifyContent: "center", alignItems: "center", paddingTop: 100 },
   emptyTitle: { fontSize: FontSize.xl, fontWeight: "700", color: Colors.text, marginBottom: Spacing.sm },
   emptySubtitle: { fontSize: FontSize.md, color: Colors.textSecondary, textAlign: "center" },
