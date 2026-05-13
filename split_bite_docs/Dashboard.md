@@ -1,14 +1,16 @@
 # SplitBite Dashboard
 
 ## Project Status
-**Current Phase:** MVP Complete — App Store resubmission (iPhone-only)
-**Last Updated:** 2026-05-03
+**Current Phase:** MVP Complete — App Store resubmission (iPhone-only, push working)
+**Last Updated:** 2026-05-13
 
 ## Recent
-- iPad resubmission: dropped iPad support after second iPad-specific rejection; final defensive fixes to AuthProvider/Profile/Activity.
+- **Build 13** (5/13): first production build with push notifications actually working — added `expo-notifications` to `app.json` plugins (the native APNs entitlement was missing), and re-aligned the APNs Key ID between Apple Developer and Expo.
+- Known OTA blocker logged: `src/lib/supabase.ts` `localStorage` access fails during SSR web export; one-line fix deferred until OTA is actually needed.
+- Build 12 (5/4): iPhone-only after second iPad-specific rejection; defensive fixes to AuthProvider/Profile/Activity tabs.
 - Custom (non-equal) item split shipped (add-only); spec at `01-requirements/2026-05-03-custom-split-design.md`.
 - Guests now first-class participants: removed host-transfer in calc engine; preview/summary show guests with their own net; layout fix for Who Pays Who row.
-- `CLAUDE.md` created with strict git rule and project conventions.
+- `CLAUDE.md` created with strict git rule and project conventions; now also documents push notification + OTA pitfalls.
 
 ---
 

@@ -62,6 +62,18 @@ For UI changes, start the dev server (`npx expo start --go --ios`) and exercise 
 
 For any new feature ("add X", "build Y"), invoke the brainstorming skill before writing code. The skill writes a spec to `split_bite_docs/01-requirements/` and only then we proceed to writing-plans.
 
+## Push notifications
+
+- The native config for push (iOS `aps-environment` entitlement, Android channel) is applied by `expo-notifications` **only when listed as a config plugin** in `app.json`. Missing this entry was the root cause of "notifications work in Expo Go but not in production" (May 2026). Always keep it under `expo.plugins`.
+- APNs auth: the Key ID stored in Expo (https://expo.dev/accounts/leo_pepsi_2/projects/split_bite/credentials) must match an active key in Apple Developer → Keys. Apple only allows 2 active keys per team — if Apple shows a different Key ID than Expo, re-upload the live `.p8` to Expo (or generate a new key and update both). A mismatch makes APNs silently reject pushes.
+
+## OTA updates (eas update)
+
+OTA is configured (`updates.url` + `runtimeVersion.policy: "appVersion"` + `expo-updates` plugin). Known blocker for any `eas update`:
+
+- `src/lib/supabase.ts` references `localStorage` directly inside the `Platform.OS === "web"` branch. The `expo export --platform=all` step that `eas update` runs evaluates the supabase client during web SSR, where `Platform.OS === "web"` is true but `localStorage` is undefined in Node. Bundling crashes.
+- Fix when ready: gate with `typeof window !== "undefined"` (or replace with `AsyncStorage` for web).
+
 ## Auto mode reminder
 
 When auto mode is on, the harness wants action over questions for routine code work. Auto mode does NOT relax:
