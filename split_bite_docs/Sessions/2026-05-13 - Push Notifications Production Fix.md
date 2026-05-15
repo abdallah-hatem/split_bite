@@ -40,3 +40,23 @@ After two earlier slips, the strict git rule (never commit or push without an ex
 - Wait for EAS to finish build 13 and auto-submit to App Store Connect.
 - In App Store Connect: attach build 13 to a TestFlight test group, install on a real device, send a test push via Expo's tool, confirm it lands. Only then promote to App Store review.
 - Fix the supabase.ts SSR issue whenever we want OTA to actually work.
+
+## Update 2026-05-14 — build 13 submit rejected, version bumped
+Build 13's binary uploaded fine but altool rejected the submission with `Invalid Pre-Release Train. The train version '1.0.0' is closed for new build submissions`. Apple had approved a 1.0.0 build at some point, closing that version train. Bumped `expo.version` 1.0.0 → 1.0.1 and shipped **build 14** (v1.0.1).
+
+`runtimeVersion.policy: "appVersion"` means OTA bundles now target the 1.0.1 train — old 1.0.0 installs won't pick up future OTA updates (intended; 1.0.1 is a hard cut-over).
+
+## Update 2026-05-15 — push notifications finally working
+Build 14 shipped with the plugin and "fixed" APNs key but pushes still didn't arrive. Diagnostic ping via Expo Push API came back with a receipt of `error: "InvalidCredentials"` / `apns.reason: "InvalidProviderToken"` (HTTP 403).
+
+Both Apple (Key ID `3KZB99KCWF`, "Expo Push Notifications Key") and Expo were showing the same Key ID, so the IDs were aligned — but Apple was rejecting the JWT signature, meaning the `.p8` Expo had didn't cryptographically match the public key Apple held for that Key ID. Likely the previously uploaded file was corrupted or wrong.
+
+Fix:
+1. Revoked `3KZB99KCWF` in Apple Developer.
+2. Created a new APNs key in Apple → got fresh Key ID `CK6KKK4PUB` and downloaded `.p8` to `~/Downloads/AuthKey_CK6KKK4PUB.p8`.
+3. Replaced the push key in https://expo.dev/accounts/leo_pepsi_2/projects/split_bite/credentials with the new `.p8` + Key ID + Team ID `CN24UJRFFJ`.
+4. Diagnostic ping after reset: send → `status: "ok"`, receipt → `status: "ok"` (no `InvalidCredentials`). Confirmed delivery to device.
+
+**Note:** the second Apple key `73M659HY23` ("SA Egypt APNs", 2026/04/30) belongs to a different project — leave alone.
+
+**No app rebuild needed.** APNs key rotation only affects how Expo signs JWTs to APNs; existing Expo push tokens stay valid. Build 14 users keep working.

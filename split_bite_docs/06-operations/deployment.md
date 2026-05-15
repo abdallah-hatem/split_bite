@@ -57,6 +57,12 @@ Requires `expo-updates` installed and `runtimeVersion.policy: "appVersion"` in `
 - **Support URL:** https://abdallah-hatem.github.io/split_bite/support.html
 - **Privacy URL:** https://abdallah-hatem.github.io/split_bite/privacy-policy.html
 
+## APNs (push notifications)
+- **Active key (2026-05-15):** `CK6KKK4PUB` — must match between Apple Developer → Keys and the Expo dashboard. Verified working via Expo Push API receipt on 2026-05-15.
+- Previous keys `3KZB99KCWF` (revoked) and `73M659HY23` ("SA Egypt APNs", different project) — do **not** point Expo at these.
+- Replacing the key never requires an app rebuild: existing Expo push tokens stay valid; only Expo's signing key changes.
+- If a receipt comes back with `error: "InvalidCredentials"` / `apns.reason: "InvalidProviderToken"`, the `.p8` in Expo doesn't cryptographically match what Apple has for the Key ID. Fix is to revoke + recreate in Apple, then re-upload the fresh `.p8` to Expo.
+
 ## Demo Account (for App Review)
 - Email: `abdallahhatem36@gmail.com`
 - Password: `123123`
