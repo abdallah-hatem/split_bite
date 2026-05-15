@@ -76,6 +76,8 @@ function handleNotificationTap(data?: Record<string, unknown>) {
       break;
     case "settlement":
     case "settlement_request":
+    case "settlement_confirmed":
+    case "settlement_rejected":
       if (groupId) {
         router.push(`/(tabs)/groups/${groupId}/balances` as any);
       } else {

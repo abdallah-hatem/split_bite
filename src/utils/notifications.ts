@@ -124,12 +124,29 @@ export async function notifyReminder(
 export async function notifySettlementRejected(
   toUserId: string,
   rejectorName: string,
-  amount: number
+  amount: number,
+  groupId?: string
 ) {
   await sendPushNotifications([toUserId], {
     title: "Settlement Rejected",
     body: `${rejectorName} rejected your settlement of ${amount.toFixed(2)}.`,
-    data: { type: "settlement_rejected" },
+    data: { type: "settlement_rejected", ...(groupId ? { groupId } : {}) },
+  });
+}
+
+/**
+ * Notify sender that their settlement was confirmed (accepted)
+ */
+export async function notifySettlementConfirmed(
+  toUserId: string,
+  confirmerName: string,
+  amount: number,
+  groupId?: string
+) {
+  await sendPushNotifications([toUserId], {
+    title: "Settlement Confirmed",
+    body: `${confirmerName} confirmed your payment of ${amount.toFixed(2)}.`,
+    data: { type: "settlement_confirmed", ...(groupId ? { groupId } : {}) },
   });
 }
 

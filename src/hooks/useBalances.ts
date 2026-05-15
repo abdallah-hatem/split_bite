@@ -5,7 +5,11 @@ import {
   computeNetBalances,
   optimizeSettlements,
 } from "@/src/utils/settlement";
-import { notifySettlement, notifySettlementRejected } from "@/src/utils/notifications";
+import {
+  notifySettlement,
+  notifySettlementConfirmed,
+  notifySettlementRejected,
+} from "@/src/utils/notifications";
 
 export type OrderDebt = {
   orderId: string;
@@ -239,19 +243,18 @@ export function useConfirmSettlement() {
         if (ledgerError) throw ledgerError;
       }
 
-      if (action === "rejected") {
-        // Notify the sender that their settlement was rejected
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("display_name")
-          .eq("id", user!.id)
-          .single();
+      // Notify the sender of the outcome (confirmed or rejected).
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user!.id)
+        .single();
+      const actorName = profile?.display_name ?? "Someone";
 
-        notifySettlementRejected(
-          fromUserId,
-          profile?.display_name ?? "Someone",
-          amount
-        );
+      if (action === "confirmed") {
+        notifySettlementConfirmed(fromUserId, actorName, amount, groupId);
+      } else {
+        notifySettlementRejected(fromUserId, actorName, amount, groupId);
       }
     },
     onSuccess: (_, variables) => {
