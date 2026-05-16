@@ -251,3 +251,65 @@ If Play asks why the app requests specific permissions:
 - **Vibrate** — optional notification feedback
 - **Read external storage / write external storage** — not requested
 - **Camera / location / contacts** — not requested
+
+---
+
+## Tags (Play lets you pick up to 5)
+
+Pick all of these — they describe the app accurately:
+
+- Bill Splitting
+- Expense Tracker
+- Group Activities
+- Money Manager
+- Personal Finance
+
+---
+
+## Promotional video
+
+Skip — we don't have one. Leave the YouTube URL field blank. The Play listing will work fine without it; you'll just miss the autoplay video at the top of the store page.
+
+---
+
+## Translations / additional languages
+
+Skip — English (United States) is the only supported language for v1. Don't add other languages in Play Console; the app's UI is English-only and adding Play translations would only translate the store listing, which is misleading.
+
+---
+
+## Countries / regions distribution
+
+Default to **All countries**. SplitBite works anywhere users have internet and is currency-agnostic in the math (we display EGP today but it's just a label). Markets where Apple is also distributing:
+
+- Egypt (primary, since the dev team is here)
+- All other countries — opt in by default
+
+The only countries to *consider* excluding are ones with sanctions / restrictions that Google handles for you anyway. So just say "all countries".
+
+---
+
+## Pre-registration
+
+Skip — pre-registration is for apps that aren't released yet and want to build a waitlist. We're launching directly into Internal testing → Production, so this section doesn't apply.
+
+---
+
+## Designed for Families program
+
+**Skip / opt out.** SplitBite is not designed for children under 13. Joining the Families program imposes extra requirements (no ads, COPPA compliance, restricted SDKs) that we don't currently meet or care about.
+
+---
+
+## Demo account for reviewers
+
+Recommend creating a fresh account specifically for Google Play reviewers rather than handing over your personal account. Steps for the friend (or me):
+
+1. In the running build, tap **Sign up** with:
+   - Email: `playreview@splitbite.app` (or any email he/she controls)
+   - Password: `Review123!`
+   - Display name: `Play Reviewer`
+2. From that account, create a sample group named *"Demo Group"* with one finalized order so reviewers see actual content if they poke around.
+3. In Play Console → App access section → enter those credentials so reviewers can sign in.
+
+This keeps your real data private during review and avoids the awkwardness of reviewers seeing your personal balances.
