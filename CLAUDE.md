@@ -88,17 +88,25 @@ For any new feature ("add X", "build Y"), invoke the brainstorming skill before 
 
 ## OTA updates (eas update)
 
-OTA is configured and working (`updates.url` + `runtimeVersion.policy: "appVersion"` + `expo-updates` plugin). Ship JS-only changes without a rebuild:
+OTA is configured and working (`updates.url` + `runtimeVersion.policy: "appVersion"` + `expo-updates` plugin).
+
+**Always ship JS-only changes via the wrapper, not raw `eas update`:**
 
 ```bash
-eas update --branch production --message "<what changed>"
+npm run ota -- "what changed in this update"
 ```
 
-This runs `expo export --platform=all` (iOS, Android, AND web — even if you don't use web). The web target is SSR'd because `app.json` has `web.output: "static"` — code that touches browser globals must be SSR-safe.
+The wrapper (`scripts/ota.js`) does two things every time:
 
-**SSR landmine (fixed but watch for regressions):** anything that runs at module-load and touches `window`, `document`, or `localStorage` will crash the export. The supabase storage adapter in `src/lib/supabase.ts` previously did this. The fix pattern is to gate with `typeof window !== "undefined"` so the code no-ops during SSR. If you add new web-only code, follow the same pattern.
+1. **Refuses to publish if `.env` points at a local Supabase URL** (`127.0.0.1`, `localhost`, `0.0.0.0`, or any non-https). This catches the easy mistake of OTA'ing while still on the local dev `.env`.
+2. **Always passes `--clear-cache`** so Metro can't reuse stale transforms.
 
-OTAs only reach builds on the **same runtime version** (= the same `expo.version`, given the `appVersion` policy). Bumping `expo.version` forks the channel — see the version-train rule under "App Store / EAS quick reference".
+Why both checks matter:
+
+- **`process.env.EXPO_PUBLIC_*` is inlined at *transform* time, not at runtime.** Metro caches transformed modules. If `.env` was local when a module was last transformed, the cached transform has the localhost URL **baked into it as a string literal**. Subsequent exports will reuse that cache and re-bake the wrong URL even if `.env` has been corrected. May 2026 burned an OTA twice this way — `.env` looked right, the published bundle still contained `127.0.0.1`. Verifying after publish: `curl` the manifest, download the launch asset, `strings -a bundle.js | grep ocwmcnjnwvsoxkxkbvmd` should hit, and `grep 127.0.0.1` should not.
+- **`expo export --platform=all` SSRs the web target** because `app.json` has `web.output: "static"`. Code that runs at module-load and touches `window` / `document` / `localStorage` will crash the export. `src/lib/supabase.ts` is gated with `typeof window !== "undefined"` for this reason; follow the same pattern for any web-only code.
+
+**OTA reach:** updates only reach builds on the **same runtime version** (= the same `expo.version`, given the `appVersion` policy). Bumping `expo.version` forks the channel — see the version-train rule under "App Store / EAS quick reference".
 
 ## Auto mode reminder
 
