@@ -26,6 +26,8 @@ import {
   useDeleteOrder,
   useDeleteItem,
   useUpdateItem,
+  useLeaveOrder,
+  useRemoveParticipant,
 } from "@/src/hooks/useOrders";
 import { useRealtimeOrder, useRealtimeItems } from "@/src/hooks/useRealtimeOrder";
 import { formatShareLabels } from "@/src/utils/itemShares";
@@ -451,6 +453,8 @@ export default function OrderDetail() {
   const deleteOrder = useDeleteOrder();
   const deleteItem = useDeleteItem();
   const updateItem = useUpdateItem();
+  const leaveOrder = useLeaveOrder();
+  const removeParticipant = useRemoveParticipant();
 
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddGuest, setShowAddGuest] = useState(false);
@@ -548,6 +552,59 @@ export default function OrderDetail() {
     refetchItems();
   };
 
+  const handleLeaveOrder = () => {
+    if (!myParticipant) return;
+    Alert.alert(
+      "Leave Order",
+      "You'll no longer be part of this bill. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await leaveOrder.mutateAsync({
+                orderId,
+                participantId: myParticipant.id,
+              });
+              router.back();
+            } catch (error: any) {
+              Alert.alert("Cannot leave", error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRemoveParticipant = (p: any) => {
+    const targetName =
+      p.profiles?.display_name ?? p.guests?.name ?? "this person";
+    Alert.alert(
+      "Remove from order",
+      `Remove ${targetName} from this order?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeParticipant.mutateAsync({
+                orderId,
+                participantId: p.id,
+                targetName,
+              });
+            } catch (error: any) {
+              Alert.alert("Cannot remove", error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (isLoading || !order) {
     return (
       <View style={styles.centered}>
@@ -615,6 +672,8 @@ export default function OrderDetail() {
                 {participants?.map((p) => {
                   const name = p.profiles?.display_name ?? p.guests?.name ?? "?";
                   const isGuest = !!p.guest_id;
+                  const isCreatorRow = p.user_id === order.created_by;
+                  const canRemove = isOwner && isOpen && !isCreatorRow;
                   return (
                     <View key={p.id} style={styles.participantItem}>
                       <View style={[styles.participantAvatar, isGuest && styles.participantAvatarGuest]}>
@@ -626,6 +685,15 @@ export default function OrderDetail() {
                         <Text style={styles.participantName} numberOfLines={1}>{name}</Text>
                         {isGuest && <Text style={styles.participantGuestTag}>Guest</Text>}
                       </View>
+                      {canRemove && (
+                        <TouchableOpacity
+                          style={styles.removeParticipantBtn}
+                          onPress={() => handleRemoveParticipant(p)}
+                          accessibilityLabel={`Remove ${name}`}
+                        >
+                          <Text style={styles.removeParticipantBtnText}>×</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   );
                 })}
@@ -746,6 +814,18 @@ export default function OrderDetail() {
 
             {!myParticipant && isOpen && user && (
               <JoinOrderButton orderId={orderId} userId={user.id} onJoined={refetchParticipants} />
+            )}
+
+            {myParticipant && !isOwner && isOpen && (
+              <TouchableOpacity
+                style={styles.leaveOrderButton}
+                onPress={handleLeaveOrder}
+                disabled={leaveOrder.isPending}
+              >
+                <Text style={styles.leaveOrderButtonText}>
+                  {leaveOrder.isPending ? "Leaving…" : "Leave Order"}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
         }
@@ -947,4 +1027,8 @@ const styles = StyleSheet.create({
   deleteButtonText: { color: Colors.error, fontSize: FontSize.md, fontWeight: "600" },
   joinButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },
   joinButtonText: { color: "#FFFFFF", fontSize: FontSize.md, fontWeight: "600" },
+  leaveOrderButton: { backgroundColor: Colors.errorLight, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },
+  leaveOrderButtonText: { color: Colors.error, fontSize: FontSize.md, fontWeight: "600" },
+  removeParticipantBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: Colors.surfaceSecondary },
+  removeParticipantBtnText: { fontSize: FontSize.lg, color: Colors.textSecondary, lineHeight: FontSize.lg },
 });

@@ -3,6 +3,10 @@ import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/providers/AuthProvider";
 import { notifyOrderCreated } from "@/src/utils/notifications";
 import { clearDraft as clearFinalizeDraft } from "@/src/utils/finalizeDraftStore";
+import {
+  isParticipantEntangled,
+  EntanglementItem,
+} from "@/src/utils/orderEntanglement";
 
 export type Order = {
   id: string;
@@ -371,6 +375,112 @@ export function useAddGuest() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: orderKeys.participants(variables.orderId),
+      });
+    },
+  });
+}
+
+/**
+ * Internal: query the order's items + shares for the given participant, then
+ * run the pure entanglement check. Throws an Error with a user-facing message
+ * if the participant is entangled and can't be removed cleanly.
+ */
+async function assertNotEntangled(
+  orderId: string,
+  participantId: string,
+  failureMessage: string
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("items")
+    .select("added_by_participant_id, item_shares(participant_id)")
+    .eq("order_id", orderId);
+
+  if (error) throw error;
+
+  if (isParticipantEntangled((data ?? []) as EntanglementItem[], participantId)) {
+    throw new Error(failureMessage);
+  }
+}
+
+/**
+ * Leave an order yourself. Caller passes the participant_id row that
+ * belongs to them (looked up in the screen). Allowed only when the order
+ * is `open`; the UI doesn't render the button otherwise.
+ */
+export function useLeaveOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      orderId,
+      participantId,
+    }: {
+      orderId: string;
+      participantId: string;
+    }) => {
+      await assertNotEntangled(
+        orderId,
+        participantId,
+        "You can't leave this order while you're sharing items with others. " +
+          "Delete those items first, or ask the order creator to remove your share."
+      );
+
+      const { error } = await supabase
+        .from("order_participants")
+        .delete()
+        .eq("id", participantId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: orderKeys.participants(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderKeys.items(variables.orderId),
+      });
+    },
+  });
+}
+
+/**
+ * Remove someone else from the order. The RLS policy restricts this to the
+ * order creator. The UI also gates the affordance.
+ *
+ * `targetName` is purely for the error message — passes through so the alert
+ * reads "Can't remove Yara …" instead of a generic message.
+ */
+export function useRemoveParticipant() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      orderId,
+      participantId,
+      targetName,
+    }: {
+      orderId: string;
+      participantId: string;
+      targetName: string;
+    }) => {
+      await assertNotEntangled(
+        orderId,
+        participantId,
+        `Can't remove ${targetName} — they're sharing items with others. ` +
+          "Delete or update those items first."
+      );
+
+      const { error } = await supabase
+        .from("order_participants")
+        .delete()
+        .eq("id", participantId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: orderKeys.participants(variables.orderId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderKeys.items(variables.orderId),
       });
     },
   });
