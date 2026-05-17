@@ -526,9 +526,17 @@ export function useUpdateOrderStatus() {
       orderId: string;
       status: Order["status"];
     }) => {
+      // Stamp finalized_at when transitioning to 'finalized' so spending-stats
+      // queries can filter by date. The schema had the column from day one
+      // but nothing was populating it.
+      const update: Record<string, unknown> = { status };
+      if (status === "finalized") {
+        update.finalized_at = new Date().toISOString();
+      }
+
       const { data, error } = await supabase
         .from("orders")
-        .update({ status })
+        .update(update)
         .eq("id", orderId)
         .select()
         .single();
