@@ -27,6 +27,14 @@ import {
 } from "@/src/utils/calculations";
 import { formatCurrency } from "@/src/utils/currency";
 import { formatShareLabels } from "@/src/utils/itemShares";
+import {
+  MergeGroup,
+  DisplayRow,
+  deriveDisplayRows,
+  applyPriceToRow,
+  mergeIntoGroup,
+  unmergeGroup,
+} from "@/src/utils/finalizeMerge";
 import { notifyOrderFinalized } from "@/src/utils/notifications";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
@@ -53,6 +61,45 @@ export default function FinalizeScreen() {
   const [itemPrices, setItemPrices] = useState<Record<string, string>>({});
   const [payerAmounts, setPayerAmounts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+
+  // "Combine items" merge state — display-only, ephemeral, no DB writes.
+  const [mergeMode, setMergeMode] = useState(false);
+  const [selectedForMerge, setSelectedForMerge] = useState<Set<string>>(new Set());
+  const [mergeGroups, setMergeGroups] = useState<MergeGroup[]>([]);
+
+  const displayRows = useMemo<DisplayRow[]>(
+    () => deriveDisplayRows((items ?? []).map((i: any) => ({ id: i.id })), mergeGroups),
+    [items, mergeGroups]
+  );
+
+  const toggleSelectForMerge = (itemId: string) => {
+    setSelectedForMerge((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const handleMergeSelected = () => {
+    const ids = Array.from(selectedForMerge);
+    if (ids.length < 2) return;
+    const groupId = `merge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    setMergeGroups((prev) => mergeIntoGroup(prev, ids, groupId));
+    // Blank the prices for newly-merged items so the user types a fresh
+    // per-item value (avoids stale individual prices "stuck" behind the
+    // group's single input).
+    setItemPrices((prev) => {
+      const next = { ...prev };
+      for (const id of ids) next[id] = "";
+      return next;
+    });
+    setSelectedForMerge(new Set());
+  };
+
+  const handleUnmerge = (groupId: string) => {
+    setMergeGroups((prev) => unmergeGroup(prev, groupId));
+  };
 
   // Merge edited prices with existing
   const effectiveItems = useMemo(() => {
@@ -326,55 +373,212 @@ export default function FinalizeScreen() {
         <Stack.Screen options={{ title: "Finalize Bill" }} />
 
         {/* Item Prices */}
-        <Text style={styles.sectionTitle}>Item Prices</Text>
-        {effectiveItems.map((item) => {
-          // Resolve who this item belongs to from the original items data
-          const origItem = items?.find((i) => i.id === item.id) as any;
-          const itemShares = origItem?.item_shares ?? [];
-          const shareLabels = formatShareLabels(itemShares, (pid) => {
-            const p = participants?.find((p: any) => p.id === pid);
-            return p?.profiles?.display_name ?? p?.guests?.name ?? null;
-          });
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>Item Prices</Text>
+          {(items ?? []).length > 1 && (
+            <TouchableOpacity
+              onPress={() => {
+                setMergeMode((m) => !m);
+                setSelectedForMerge(new Set());
+              }}
+              style={styles.combineToggle}
+            >
+              <Text style={styles.combineToggleText}>
+                {mergeMode ? "Done" : "Combine items"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-          const addedByName =
-            origItem?.added_by?.profiles?.display_name ??
-            origItem?.added_by?.guests?.name ??
-            null;
+        {displayRows.map((row) => {
+          if (row.kind === "item") {
+            const item = effectiveItems.find((i) => i.id === row.itemId);
+            if (!item) return null;
+            const origItem = items?.find((i) => i.id === item.id) as any;
+            const itemShares = origItem?.item_shares ?? [];
+            const shareLabels = formatShareLabels(itemShares, (pid) => {
+              const p = participants?.find((p: any) => p.id === pid);
+              return p?.profiles?.display_name ?? p?.guests?.name ?? null;
+            });
+            const addedByName =
+              origItem?.added_by?.profiles?.display_name ??
+              origItem?.added_by?.guests?.name ??
+              null;
+            const isSharedItem = shareLabels.length > 1;
+            const selected = selectedForMerge.has(item.id);
 
-          const isSharedItem = shareLabels.length > 1;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.itemRow,
+                  mergeMode && selected && styles.itemRowSelected,
+                ]}
+                activeOpacity={mergeMode ? 0.6 : 1}
+                disabled={!mergeMode}
+                onPress={() => toggleSelectForMerge(item.id)}
+              >
+                {mergeMode && (
+                  <View
+                    style={[
+                      styles.mergeCheckbox,
+                      selected && styles.mergeCheckboxChecked,
+                    ]}
+                  />
+                )}
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                  {isSharedItem ? (
+                    <Text style={styles.sharedTag}>
+                      Split: {shareLabels.join(", ")}
+                    </Text>
+                  ) : addedByName ? (
+                    <Text style={styles.addedByTag}>{addedByName}</Text>
+                  ) : null}
+                </View>
+                {!mergeMode && (
+                  <TextInput
+                    style={[
+                      styles.priceInput,
+                      !item.price && styles.priceInputMissing,
+                    ]}
+                    value={
+                      itemPrices[item.id] !== undefined
+                        ? itemPrices[item.id]
+                        : item.price ? item.price.toString() : ""
+                    }
+                    onChangeText={(v) =>
+                      setItemPrices((prev) =>
+                        applyPriceToRow(row, v, prev)
+                      )
+                    }
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor={Colors.textTertiary}
+                  />
+                )}
+              </TouchableOpacity>
+            );
+          }
+
+          // Group row
+          const groupItems = row.itemIds
+            .map((id) => items?.find((i) => i.id === id))
+            .filter(Boolean) as any[];
+          if (groupItems.length === 0) return null;
+          const nameSource =
+            groupItems.find((i) => i.id === row.displayNameSourceId) ??
+            groupItems[0];
+          const groupName = `${nameSource.name} ×${row.itemIds.length}`;
+
+          // Union of unique participant names across all items in the group.
+          const pidSet = new Set<string>();
+          for (const gi of groupItems) {
+            for (const s of gi.item_shares ?? []) {
+              if (s.participant_id) pidSet.add(s.participant_id);
+            }
+          }
+          const groupShareNames: string[] = [];
+          for (const pid of pidSet) {
+            const p = participants?.find((pp: any) => pp.id === pid);
+            const name = p?.profiles?.display_name ?? p?.guests?.name;
+            if (name) groupShareNames.push(name);
+          }
+
+          // All underlying items share the same price after applyPriceToRow.
+          // Read from the first item.
+          const firstId = row.itemIds[0];
+          const firstItem = effectiveItems.find((i) => i.id === firstId);
+          const priceValue =
+            itemPrices[firstId] !== undefined
+              ? itemPrices[firstId]
+              : firstItem?.price ? firstItem.price.toString() : "";
+
+          const groupSelectedItemId = row.itemIds.find((id) =>
+            selectedForMerge.has(id)
+          );
 
           return (
-          <View key={item.id} style={styles.itemRow}>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              {isSharedItem ? (
-                <Text style={styles.sharedTag}>
-                  Split: {shareLabels.join(", ")}
-                </Text>
-              ) : addedByName ? (
-                <Text style={styles.addedByTag}>{addedByName}</Text>
-              ) : null}
-            </View>
-            <TextInput
+            <TouchableOpacity
+              key={row.groupId}
               style={[
-                styles.priceInput,
-                !item.price && styles.priceInputMissing,
+                styles.itemRow,
+                styles.groupRow,
+                mergeMode && groupSelectedItemId && styles.itemRowSelected,
               ]}
-              value={
-                itemPrices[item.id] !== undefined
-                  ? itemPrices[item.id]
-                  : item.price ? item.price.toString() : ""
-              }
-              onChangeText={(v) =>
-                setItemPrices((prev) => ({ ...prev, [item.id]: v }))
-              }
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              placeholderTextColor={Colors.textTertiary}
-            />
-          </View>
+              activeOpacity={mergeMode ? 0.6 : 1}
+              disabled={!mergeMode}
+              onPress={() => {
+                // Tapping a group in merge mode toggles selection of the
+                // primary item id, which then flattens with the group when
+                // user hits "Merge" (via mergeIntoGroup's overlap handling).
+                toggleSelectForMerge(row.itemIds[0]);
+              }}
+            >
+              {mergeMode && (
+                <View
+                  style={[
+                    styles.mergeCheckbox,
+                    groupSelectedItemId && styles.mergeCheckboxChecked,
+                  ]}
+                />
+              )}
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>{groupName}</Text>
+                {groupShareNames.length > 0 && (
+                  <Text style={styles.sharedTag}>
+                    Split: {groupShareNames.join(", ")}
+                  </Text>
+                )}
+              </View>
+              {!mergeMode && (
+                <>
+                  <TextInput
+                    style={[
+                      styles.priceInput,
+                      !priceValue && styles.priceInputMissing,
+                    ]}
+                    value={priceValue}
+                    onChangeText={(v) =>
+                      setItemPrices((prev) => applyPriceToRow(row, v, prev))
+                    }
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor={Colors.textTertiary}
+                  />
+                  <TouchableOpacity
+                    onPress={() => handleUnmerge(row.groupId)}
+                    style={styles.unmergeBtn}
+                    accessibilityLabel="Unmerge group"
+                  >
+                    <Text style={styles.unmergeBtnText}>×</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </TouchableOpacity>
           );
         })}
+
+        {mergeMode && (
+          <View style={styles.mergeToolbar}>
+            <Text style={styles.mergeToolbarCount}>
+              {selectedForMerge.size} selected
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.mergeButton,
+                selectedForMerge.size < 2 && styles.mergeButtonDisabled,
+              ]}
+              disabled={selectedForMerge.size < 2}
+              onPress={handleMergeSelected}
+            >
+              <Text style={styles.mergeButtonText}>
+                Merge {selectedForMerge.size > 0 ? selectedForMerge.size : ""}{" "}
+                items
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.sumRow}>
           <Text style={styles.sumLabel}>Items Sum</Text>
@@ -605,18 +809,32 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: Spacing.lg },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: "700", color: Colors.text, marginBottom: Spacing.sm },
+  sectionTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm },
+  combineToggle: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.primary, backgroundColor: Colors.primary + "15" },
+  combineToggleText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: "600" },
   label: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.text, marginTop: Spacing.sm, marginBottom: Spacing.xs },
   hint: { fontSize: FontSize.sm, color: Colors.textTertiary, marginBottom: Spacing.sm },
   input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.md, fontSize: FontSize.md, color: Colors.text },
   row: { flexDirection: "row", gap: Spacing.sm },
   halfInput: { flex: 1 },
-  itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: Spacing.sm },
+  itemRowSelected: { backgroundColor: Colors.primary + "10" },
+  groupRow: { backgroundColor: Colors.surface, borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.sm, marginVertical: 2, borderBottomWidth: 0 },
   itemInfo: { flex: 1 },
   itemName: { fontSize: FontSize.md, color: Colors.text },
   sharedTag: { fontSize: FontSize.xs, color: Colors.primary },
   addedByTag: { fontSize: FontSize.xs, color: Colors.textTertiary },
   priceInput: { width: 100, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.sm, padding: Spacing.sm, fontSize: FontSize.md, color: Colors.text, textAlign: "right" },
   priceInputMissing: { borderColor: Colors.error, backgroundColor: Colors.errorLight },
+  mergeCheckbox: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: Colors.border },
+  mergeCheckboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  unmergeBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: Colors.surfaceSecondary },
+  unmergeBtnText: { fontSize: FontSize.lg, color: Colors.textSecondary, lineHeight: FontSize.lg },
+  mergeToolbar: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.sm, marginTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
+  mergeToolbarCount: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: "500" },
+  mergeButton: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm, backgroundColor: Colors.primary },
+  mergeButtonDisabled: { opacity: 0.4 },
+  mergeButtonText: { fontSize: FontSize.sm, color: "#FFFFFF", fontWeight: "600" },
   sumRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: Spacing.sm, marginTop: Spacing.xs },
   sumLabel: { fontSize: FontSize.md, fontWeight: "600", color: Colors.text },
   sumValue: { fontSize: FontSize.md, fontWeight: "700", color: Colors.text },
