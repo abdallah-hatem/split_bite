@@ -2,6 +2,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tansta
 import { supabase } from "@/src/lib/supabase";
 import { useAuth } from "@/src/providers/AuthProvider";
 import { notifyOrderCreated } from "@/src/utils/notifications";
+import { clearDraft as clearFinalizeDraft } from "@/src/utils/finalizeDraftStore";
 
 export type Order = {
   id: string;
@@ -392,6 +393,8 @@ export function useDeleteOrder() {
         .eq("id", orderId);
 
       if (error) throw error;
+      // Drop any local finalize draft tied to this order.
+      await clearFinalizeDraft(orderId);
       return { groupId };
     },
     onSuccess: ({ groupId }) => {
@@ -421,6 +424,12 @@ export function useUpdateOrderStatus() {
         .single();
 
       if (error) throw error;
+      // If the host reopened a finalized order (back to 'open'), drop the
+      // stale pre-finalize draft so the next finalize visit starts from the
+      // current DB state, not a 30-day-old form snapshot.
+      if (status === "open") {
+        await clearFinalizeDraft(orderId);
+      }
       return data as Order;
     },
     onSuccess: (order) => {

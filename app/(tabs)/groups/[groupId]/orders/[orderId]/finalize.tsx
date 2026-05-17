@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -36,6 +36,8 @@ import {
   unmergeGroup,
 } from "@/src/utils/finalizeMerge";
 import { notifyOrderFinalized } from "@/src/utils/notifications";
+import { useFinalizeDraft } from "@/src/hooks/useFinalizeDraft";
+import { filterDraftToCurrentOrder } from "@/src/utils/finalizeDraftStore";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -66,6 +68,65 @@ export default function FinalizeScreen() {
   const [mergeMode, setMergeMode] = useState(false);
   const [selectedForMerge, setSelectedForMerge] = useState<Set<string>>(new Set());
   const [mergeGroups, setMergeGroups] = useState<MergeGroup[]>([]);
+
+  // Draft persistence — auto-saves form state to AsyncStorage so navigating
+  // away and back doesn't wipe everything.
+  const draft = useFinalizeDraft(orderId);
+  const [draftSeeded, setDraftSeeded] = useState(false);
+
+  // Seed from the loaded draft once items + participants are available so we
+  // can filter out entries that reference deleted rows.
+  useEffect(() => {
+    if (draftSeeded) return;
+    if (!draft.hydrated) return;
+    if (!items || !participants) return;
+    if (!draft.initialState) {
+      setDraftSeeded(true);
+      return;
+    }
+    const filtered = filterDraftToCurrentOrder(
+      draft.initialState,
+      new Set(items.map((i: any) => i.id)),
+      new Set(participants.map((p: any) => p.id))
+    );
+    setItemPrices(filtered.itemPrices);
+    setActualTotal(filtered.actualTotal);
+    setTax(filtered.tax);
+    setVat(filtered.vat);
+    setDelivery(filtered.delivery);
+    setDiscount(filtered.discount);
+    setPayerAmounts(filtered.payerAmounts);
+    setMergeGroups(filtered.mergeGroups);
+    setDraftSeeded(true);
+  }, [draft.hydrated, draft.initialState, items, participants, draftSeeded]);
+
+  // Auto-save on every relevant state change (debounced inside the hook).
+  // Only after seeding completes, otherwise the first effect run would
+  // overwrite the persisted draft with empty initial values.
+  useEffect(() => {
+    if (!draftSeeded) return;
+    draft.save({
+      itemPrices,
+      actualTotal,
+      tax,
+      vat,
+      delivery,
+      discount,
+      payerAmounts,
+      mergeGroups,
+    });
+  }, [
+    draftSeeded,
+    itemPrices,
+    actualTotal,
+    tax,
+    vat,
+    delivery,
+    discount,
+    payerAmounts,
+    mergeGroups,
+    draft,
+  ]);
 
   const displayRows = useMemo<DisplayRow[]>(
     () => deriveDisplayRows((items ?? []).map((i: any) => ({ id: i.id })), mergeGroups),
@@ -331,6 +392,10 @@ export default function FinalizeScreen() {
               orderId,
               status: "finalized",
             });
+
+            // Bill is committed to the DB; drop the local draft so a future
+            // visit to finalize starts from the persisted state.
+            await draft.clear();
 
             // Send notification
             const { data: profile } = await supabase

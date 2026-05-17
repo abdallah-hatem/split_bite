@@ -7,6 +7,33 @@ jest.mock("expo-secure-store", () => ({
   deleteItemAsync: jest.fn(() => Promise.resolve()),
 }));
 
+// Mock @react-native-async-storage/async-storage with an in-memory implementation.
+jest.mock("@react-native-async-storage/async-storage", () => {
+  let store: Record<string, string> = {};
+  return {
+    __esModule: true,
+    default: {
+      getItem: jest.fn(async (key: string) => store[key] ?? null),
+      setItem: jest.fn(async (key: string, value: string) => {
+        store[key] = value;
+      }),
+      removeItem: jest.fn(async (key: string) => {
+        delete store[key];
+      }),
+      multiGet: jest.fn(async (keys: string[]) =>
+        keys.map((k) => [k, store[k] ?? null] as [string, string | null])
+      ),
+      multiRemove: jest.fn(async (keys: string[]) => {
+        for (const k of keys) delete store[k];
+      }),
+      getAllKeys: jest.fn(async () => Object.keys(store)),
+      clear: jest.fn(async () => {
+        store = {};
+      }),
+    },
+  };
+});
+
 // Mock expo-router
 jest.mock("expo-router", () => ({
   router: {
