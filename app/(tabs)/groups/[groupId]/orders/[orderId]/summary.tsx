@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useLocalSearchParams, router, Stack } from "expo-router";
+import { useAuth } from "@/src/providers/AuthProvider";
 import {
   useOrder,
   useOrderParticipants,
@@ -28,10 +29,17 @@ export default function OrderSummary() {
     groupId: string;
     orderId: string;
   }>();
+  const { user } = useAuth();
   const { data: order } = useOrder(orderId);
   const { data: participants } = useOrderParticipants(orderId);
   const { data: items } = useOrderItems(orderId);
   const { data: payments } = usePayments(orderId);
+
+  // "Me" — the current user's participant row, if they're in this order.
+  const myParticipantId = useMemo(() => {
+    if (!user) return null;
+    return participants?.find((p) => p.user_id === user.id)?.id ?? null;
+  }, [user, participants]);
 
   const result = useMemo(() => {
     if (!order?.actual_total || !items?.length || !participants?.length) return null;
@@ -153,7 +161,11 @@ export default function OrderSummary() {
           const itemShares = item.item_shares ?? [];
           const shareLabels = formatShareLabels(itemShares, (pid) => {
             const p = participants?.find((p: any) => p.id === pid);
-            return p?.profiles?.display_name ?? p?.guests?.name ?? null;
+            const name = p?.profiles?.display_name ?? p?.guests?.name ?? null;
+            if (name && myParticipantId && p?.id === myParticipantId) {
+              return `${name} (you)`;
+            }
+            return name;
           });
           const addedByName =
             item.added_by?.profiles?.display_name ??
@@ -161,8 +173,19 @@ export default function OrderSummary() {
             null;
           const isSharedItem = shareLabels.length > 1;
 
+          // Highlight rows where I'm involved (added by me or I have a share).
+          const isMyItem =
+            !!myParticipantId &&
+            (item.added_by_participant_id === myParticipantId ||
+              itemShares.some(
+                (s: any) => s.participant_id === myParticipantId
+              ));
+
           return (
-            <View key={item.id} style={styles.itemRow}>
+            <View
+              key={item.id}
+              style={[styles.itemRow, isMyItem && styles.rowMine]}
+            >
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 {isSharedItem ? (
@@ -170,7 +193,12 @@ export default function OrderSummary() {
                     Split: {shareLabels.join(", ")}
                   </Text>
                 ) : addedByName ? (
-                  <Text style={styles.addedByTag}>{addedByName}</Text>
+                  <Text style={styles.addedByTag}>
+                    {addedByName}
+                    {item.added_by_participant_id === myParticipantId
+                      ? " (you)"
+                      : ""}
+                  </Text>
                 ) : null}
               </View>
               <Text style={styles.itemPrice}>
@@ -214,11 +242,17 @@ export default function OrderSummary() {
               .map((b) => {
                 const name = getParticipantName(b.participantId);
                 const isGuest = !!b.guestId;
+                const isMe = b.participantId === myParticipantId;
 
                 return (
-                  <View key={b.participantId} style={styles.breakdownRow}>
+                  <View
+                    key={b.participantId}
+                    style={[styles.breakdownRow, isMe && styles.rowMine]}
+                  >
                     <Text style={styles.breakdownName}>
-                      {name}{isGuest ? "  (Guest)" : ""}
+                      {name}
+                      {isGuest ? "  (Guest)" : ""}
+                      {isMe ? "  (you)" : ""}
                     </Text>
                     <View style={styles.breakdownDetails}>
                       <View style={styles.breakdownLine}>
@@ -311,11 +345,19 @@ export default function OrderSummary() {
                   const guestP = participants?.find((p) => p.guest_id === guestId);
                   return (guestP?.guests?.name ?? "Guest") + " (Guest)";
                 }
+                const isMeId = user?.id && id === user.id;
                 const b = result.breakdowns.find((b) => b.userId === id);
-                return b ? getParticipantName(b.participantId) : "Unknown";
+                const base = b ? getParticipantName(b.participantId) : "Unknown";
+                return isMeId ? `${base} (you)` : base;
               };
+              const involvesMe =
+                !!user?.id &&
+                (d.fromUserId === user.id || d.toUserId === user.id);
               return (
-                <View key={i} style={styles.settlementRow}>
+                <View
+                  key={i}
+                  style={[styles.settlementRow, involvesMe && styles.rowMine]}
+                >
                   <View style={styles.settlementArrow}>
                     <Text style={styles.settlementFrom}>
                       {resolveDebtName(d.fromUserId)}
@@ -357,6 +399,7 @@ const styles = StyleSheet.create({
   date: { fontSize: FontSize.sm, color: Colors.textTertiary, marginBottom: Spacing.lg },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: "700", color: Colors.text, marginBottom: Spacing.sm },
   card: { backgroundColor: Colors.surface, borderRadius: BorderRadius.md, padding: Spacing.md, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.lg },
+  rowMine: { borderLeftWidth: 3, borderLeftColor: Colors.primary, paddingLeft: Spacing.sm, marginLeft: -Spacing.sm, backgroundColor: Colors.primary + "0d" },
   totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: Spacing.xs },
   totalLabel: { fontSize: FontSize.md, color: Colors.textSecondary },
   totalValue: { fontSize: FontSize.md, color: Colors.text },

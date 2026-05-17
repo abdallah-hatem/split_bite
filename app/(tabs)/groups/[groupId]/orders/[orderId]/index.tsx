@@ -459,6 +459,7 @@ export default function OrderDetail() {
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddGuest, setShowAddGuest] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [showMineOnly, setShowMineOnly] = useState(false);
 
   // Realtime subscriptions
   useRealtimeOrder(orderId);
@@ -632,7 +633,15 @@ export default function OrderDetail() {
       <Stack.Screen options={{ title: order.title }} />
 
       <FlatList
-        data={items ?? []}
+        data={
+          showMineOnly && myParticipant
+            ? (items ?? []).filter((it: any) =>
+                (it.item_shares ?? []).some(
+                  (s: any) => s.participant_id === myParticipant.id
+                )
+              )
+            : items ?? []
+        }
         keyExtractor={(item) => item.id}
         refreshControl={
           <RefreshControl refreshing={false} onRefresh={refetchAll} />
@@ -705,11 +714,31 @@ export default function OrderDetail() {
               <Text style={styles.sectionTitle}>
                 Items ({items?.length ?? 0})
               </Text>
-              {isOpen && myParticipant && (
-                <TouchableOpacity onPress={() => { refetchParticipants(); setShowAddItem(true); }}>
-                  <Text style={styles.addLink}>+ Add Item</Text>
-                </TouchableOpacity>
-              )}
+              <View style={styles.itemsHeaderActions}>
+                {myParticipant && (items?.length ?? 0) > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setShowMineOnly((v) => !v)}
+                    style={[
+                      styles.filterToggle,
+                      showMineOnly && styles.filterToggleActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterToggleText,
+                        showMineOnly && styles.filterToggleTextActive,
+                      ]}
+                    >
+                      {showMineOnly ? "My items only" : "All items"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {isOpen && myParticipant && (
+                  <TouchableOpacity onPress={() => { refetchParticipants(); setShowAddItem(true); }}>
+                    <Text style={styles.addLink}>+ Add Item</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         }
@@ -1031,4 +1060,9 @@ const styles = StyleSheet.create({
   leaveOrderButtonText: { color: Colors.error, fontSize: FontSize.md, fontWeight: "600" },
   removeParticipantBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: Colors.surfaceSecondary },
   removeParticipantBtnText: { fontSize: FontSize.lg, color: Colors.textSecondary, lineHeight: FontSize.lg },
+  itemsHeaderActions: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  filterToggle: { paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
+  filterToggleActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + "15" },
+  filterToggleText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: "500" },
+  filterToggleTextActive: { color: Colors.primary, fontWeight: "600" },
 });
