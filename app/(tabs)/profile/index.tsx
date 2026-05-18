@@ -7,12 +7,15 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
+import { Link } from "expo-router";
 import { useAuth } from "@/src/providers/AuthProvider";
+import { useIsAdmin } from "@/src/hooks/useIsAdmin";
 import { supabase } from "@/src/lib/supabase";
 import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const [displayName, setDisplayName] = useState("");
   const [originalName, setOriginalName] = useState("");
   const [editing, setEditing] = useState(false);
@@ -209,6 +212,18 @@ export default function ProfileScreen() {
         <Text style={styles.email}>{user?.email}</Text>
       </View>
 
+      {isAdmin && (
+        <View style={styles.adminSection}>
+          <Text style={styles.adminLabel}>Admin tools</Text>
+          <Link href={"/(tabs)/profile/admin-restaurants" as any} asChild>
+            <TouchableOpacity style={styles.adminRow}>
+              <Text style={styles.adminRowName}>Restaurants</Text>
+              <Text style={styles.adminRowMeta}>Add / refresh menus</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+      )}
+
       <View style={styles.spacer} />
 
       <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
@@ -243,6 +258,30 @@ const styles = StyleSheet.create({
   cancelEditText: { color: Colors.textSecondary, fontWeight: "600" },
   saveButton: { flex: 1, padding: Spacing.sm, alignItems: "center", borderRadius: BorderRadius.md, backgroundColor: Colors.primary },
   saveButtonText: { color: "#FFFFFF", fontWeight: "600" },
+  adminSection: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  adminLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: "700",
+    color: Colors.textTertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  adminRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+  },
+  adminRowName: { fontSize: FontSize.md, fontWeight: "600", color: Colors.text },
+  adminRowMeta: { fontSize: FontSize.xs, color: Colors.textTertiary },
   spacer: { flex: 1 },
   signOutButton: { backgroundColor: Colors.errorLight, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center", marginBottom: Spacing.lg },
   signOutText: { color: Colors.error, fontSize: FontSize.md, fontWeight: "600" },

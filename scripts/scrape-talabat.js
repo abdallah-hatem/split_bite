@@ -144,14 +144,27 @@ function pickPayload(nextData) {
         external_id: String(c.id),
         name: String(c.name ?? "").trim() || `Category ${idx + 1}`,
         display_order: idx,
-        items: (c.items ?? []).map((it, j) => ({
-          external_id: String(it.id),
-          name: String(it.name ?? "").trim() || `Item ${j + 1}`,
-          description: it.description ? String(it.description).trim() : null,
-          price: typeof it.price === "number" ? it.price : Number(it.price) || 0,
-          image_url: it.originalImage || it.image || null,
-          display_order: j,
-        })),
+        items: (c.items ?? []).map((it, j) => {
+          // Talabat: hasChoices + price=0 means "Price on Selection". Store
+          // null so the UI prompts the user for the actual price when picked.
+          const rawPrice =
+            typeof it.price === "number" ? it.price : Number(it.price);
+          const hasChoices = it.hasChoices === true;
+          const price =
+            Number.isFinite(rawPrice) && rawPrice > 0
+              ? rawPrice
+              : hasChoices
+              ? null
+              : 0;
+          return {
+            external_id: String(it.id),
+            name: String(it.name ?? "").trim() || `Item ${j + 1}`,
+            description: it.description ? String(it.description).trim() : null,
+            price,
+            image_url: it.originalImage || it.image || null,
+            display_order: j,
+          };
+        }),
       })),
   };
 }

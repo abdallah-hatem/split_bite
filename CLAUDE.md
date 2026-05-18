@@ -116,22 +116,34 @@ A restaurant catalogue with menus lives in three tables (`restaurants`, `menu_ca
 
 **Schema is source-agnostic** via `(external_source, external_id)` — `'talabat'` is the first source; future `'manual'` / `'foursquare'` etc. drop in without schema changes.
 
-**Scraping is local-only and admin-curated.** Talabat ToS forbids automated scraping; Apple's 5.2.2 could reject apps that obviously rip data. Mitigations: scraper runs only on the maintainer's Mac (no production scraping infra), runs only against URLs the maintainer explicitly invokes, and is rate-limited to 6h per restaurant.
+**Scraping is admin-curated.** Talabat ToS forbids automated scraping; Apple's 5.2.2 could reject apps that obviously rip data. Mitigations: scraping only runs against URLs an admin explicitly pastes (never an automated crawler), is rate-limited to 6h per restaurant, and is gated by `profiles.is_admin = true`.
 
-To add or refresh a restaurant:
+Two ways to scrape:
+
+**1. In-app (production-friendly).** Sign in as an admin → Profile → "Admin tools" → Restaurants → paste a Talabat URL → Scrape. Calls the `scrape-talabat` Edge Function which verifies `profiles.is_admin = true` on the caller before using the service-role key. Same flow for refresh / delete.
+
+Granting admin happens out-of-band via SQL (intentionally — no UI for it):
+```sql
+update public.profiles set is_admin = true
+ where id = (select id from auth.users where email = 'you@example.com');
+```
+
+**2. Local Node script** (still works for batch / dev iteration):
 ```bash
-# One-time setup
 cp scripts/.env.scraper.example scripts/.env.scraper.local
-# Edit the .local file to point at local or cloud Supabase + service-role key.
-
-# Each restaurant
 npm run scrape:talabat -- https://www.talabat.com/egypt/restaurant/<id>/<slug>
 # Add --force to override the 6h re-scrape guard.
 ```
 
-The scraper fetches the public Talabat URL, extracts the `__NEXT_DATA__` SSR JSON blob, validates structure (loud failure if Talabat changes shape), and upserts via the service-role key. RLS allows any signed-in user to read all three tables; no write policies, so only the service-role key can mutate.
+Both paths read `__NEXT_DATA__.props.pageProps.initialMenuState` and upsert via the service-role key. RLS allows any signed-in user to read the catalogue; there are no write policies, so only the service-role key (Node script env or Edge Function runtime) can mutate.
 
-**When the Talabat shape changes**, the scraper will print a clear "menuData missing / shape changed" error. Inspect `__NEXT_DATA__.props.pageProps.initialMenuState` on a fresh page to find what moved.
+**When the Talabat shape changes**, both paths fail loudly with "menuData missing / shape changed". Inspect `__NEXT_DATA__.props.pageProps.initialMenuState` on a fresh page to find what moved.
+
+**"Price on Selection" items** (Talabat's `hasChoices && price=0`) store `null` in `menu_items.price`. The picker renders "Price varies"; AddItemModal leaves the price field empty when one is picked, so the user types the actual amount. Real zero-priced items would still store `0` — `null` means "Talabat couldn't quote a base price."
+
+**`Picks for you 🔥`** (Talabat category `id: -1`) is intentionally filtered out. It's an algorithmic recommendation row that duplicates items from real categories and shifts per session — including it would create dupes.
+
+**Metro blocklist:** `metro.config.js` excludes `.env.<env>.local` backup files from bundling. Without that, opening the dev server with a `.env.cloud.local` (the cloud-Supabase backup CLAUDE.md prescribes) sitting at the project root makes Metro try to parse it as JS and throws `SyntaxError`. If you ever add another env backup pattern, extend the regex.
 
 ## Auto mode reminder
 

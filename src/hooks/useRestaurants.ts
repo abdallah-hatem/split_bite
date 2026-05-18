@@ -11,6 +11,8 @@ export type Restaurant = {
   currency: string;
   logo_url: string | null;
   image_url: string | null;
+  url: string | null;
+  last_scraped_at: string | null;
 };
 
 /**
@@ -25,7 +27,7 @@ export function useRestaurants(search?: string) {
       const { data, error } = await supabase
         .from("restaurants")
         .select(
-          "id, external_source, external_id, name, slug, cuisine, currency, logo_url, image_url"
+          "id, external_source, external_id, name, slug, cuisine, currency, logo_url, image_url, url, last_scraped_at"
         )
         .order("name", { ascending: true });
       if (error) throw error;

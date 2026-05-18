@@ -25,7 +25,8 @@ import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 export type PickedMenuItem = {
   name: string;
-  price: number;
+  /** null when the menu didn't have a fixed price — caller should prompt. */
+  price: number | null;
 };
 
 type SharedProps = {
@@ -248,6 +249,13 @@ function RestaurantMenu({
   const chipLayoutsRef = useRef<Record<number, { x: number; width: number }>>(
     {}
   );
+  // While a tap-initiated scroll animation is in flight, SectionList fires
+  // onViewableItemsChanged for every intermediate section it passes through,
+  // which makes the active chip flicker and auto-scroll back and forth. We
+  // suppress those updates while this ref is true and reset it on momentum
+  // end (with a timeout fallback for short scrolls that don't trigger it).
+  const programmaticScrollRef = useRef(false);
+  const programmaticScrollResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Filter items by search query but keep the section structure so the
   // category bar stays meaningful.
@@ -288,6 +296,9 @@ function RestaurantMenu({
 
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      // Ignore intermediate viewability updates triggered by our own
+      // scrollToLocation animation — those would chatter the active chip.
+      if (programmaticScrollRef.current) return;
       // Pick the section of the topmost viewable header / item.
       const first = viewableItems.find((v) => v.index !== null);
       if (!first) return;
@@ -298,6 +309,16 @@ function RestaurantMenu({
 
   const handleCategoryTap = useCallback((idx: number) => {
     setActiveCategoryIdx(idx);
+    programmaticScrollRef.current = true;
+    if (programmaticScrollResetTimer.current) {
+      clearTimeout(programmaticScrollResetTimer.current);
+    }
+    // Fallback unlock: in case onMomentumScrollEnd doesn't fire (short
+    // scrolls, no momentum), release the lock after a fixed window.
+    programmaticScrollResetTimer.current = setTimeout(() => {
+      programmaticScrollRef.current = false;
+    }, 800);
+
     try {
       sectionListRef.current?.scrollToLocation({
         sectionIndex: idx,
@@ -308,6 +329,23 @@ function RestaurantMenu({
     } catch {
       /* swallow — happens if items haven't measured yet */
     }
+  }, []);
+
+  const onMomentumScrollEnd = useCallback(() => {
+    programmaticScrollRef.current = false;
+    if (programmaticScrollResetTimer.current) {
+      clearTimeout(programmaticScrollResetTimer.current);
+      programmaticScrollResetTimer.current = null;
+    }
+  }, []);
+
+  // Clear the timeout on unmount.
+  useEffect(() => {
+    return () => {
+      if (programmaticScrollResetTimer.current) {
+        clearTimeout(programmaticScrollResetTimer.current);
+      }
+    };
   }, []);
 
   if (isLoading) {
@@ -415,6 +453,7 @@ function RestaurantMenu({
             itemVisiblePercentThreshold: 30,
             minimumViewTime: 50,
           }}
+          onMomentumScrollEnd={onMomentumScrollEnd}
           onScrollToIndexFailed={() => {
             /* SectionList sometimes throws before items are measured */
           }}
@@ -459,9 +498,13 @@ function RestaurantMenu({
                     {item.description}
                   </Text>
                 ) : null}
-                <Text style={styles.itemPrice}>
-                  {restaurant.currency} {item.price.toFixed(2)}
-                </Text>
+                {item.price === null ? (
+                  <Text style={styles.itemPriceVaries}>Price varies</Text>
+                ) : (
+                  <Text style={styles.itemPrice}>
+                    {restaurant.currency} {item.price.toFixed(2)}
+                  </Text>
+                )}
               </View>
             </TouchableOpacity>
           )}
@@ -526,4 +569,5 @@ const styles = StyleSheet.create({
   itemName: { fontSize: FontSize.md, fontWeight: "700", color: Colors.text },
   itemDescription: { fontSize: FontSize.xs, color: Colors.textSecondary, lineHeight: 16 },
   itemPrice: { fontSize: FontSize.sm, fontWeight: "700", color: Colors.primary, marginTop: 2 },
+  itemPriceVaries: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.textTertiary, fontStyle: "italic", marginTop: 2 },
 });

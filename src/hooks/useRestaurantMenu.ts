@@ -5,7 +5,8 @@ export type MenuItem = {
   id: string;
   name: string;
   description: string | null;
-  price: number;
+  /** null = "Price on Selection" — Talabat couldn't quote a base price. */
+  price: number | null;
   image_url: string | null;
   display_order: number;
 };

@@ -416,7 +416,8 @@ function AddItemModal({
         restaurantId={restaurantId ?? undefined}
         onPickItem={(picked) => {
           setName(picked.name);
-          setPrice(picked.price.toFixed(2));
+          // Price on Selection: leave the field empty so the user types it.
+          setPrice(picked.price === null ? "" : picked.price.toFixed(2));
           setShowPicker(false);
         }}
       />

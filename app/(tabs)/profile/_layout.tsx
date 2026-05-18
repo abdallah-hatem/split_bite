@@ -9,6 +9,7 @@ export default function ProfileLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: "Profile" }} />
+      <Stack.Screen name="admin-restaurants" options={{ title: "Restaurants" }} />
     </Stack>
   );
 }
