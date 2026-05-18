@@ -15,7 +15,8 @@
     "test:db": "supabase test db",
     "test:e2e": "maestro test __tests__/e2e/maestro/",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:db",
-    "ota": "node scripts/ota.js"
+    "ota": "node scripts/ota.js",
+    "scrape:talabat": "node scripts/scrape-talabat.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

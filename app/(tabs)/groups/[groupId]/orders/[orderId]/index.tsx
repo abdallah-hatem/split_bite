@@ -1,37 +1,42 @@
+import { PickFromMenuSheet } from "@/src/components/orders/PickFromMenuSheet";
+import {
+  useAddGuest,
+  useAddItem,
+  useDeleteItem,
+  useDeleteOrder,
+  useLeaveOrder,
+  useOrder,
+  useOrderItems,
+  useOrderParticipants,
+  useRemoveParticipant,
+  useUpdateItem,
+  useUpdateOrderStatus,
+} from "@/src/hooks/useOrders";
+import {
+  useRealtimeItems,
+  useRealtimeOrder,
+} from "@/src/hooks/useRealtimeOrder";
+import { BorderRadius, Colors, FontSize, Spacing } from "@/src/lib/constants";
+import { useAuth } from "@/src/providers/AuthProvider";
+import { formatShareLabels } from "@/src/utils/itemShares";
+import { Link, Stack, router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  FlatList,
   ActivityIndicator,
-  RefreshControl,
   Alert,
-  TextInput,
-  Modal,
+  FlatList,
+  Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  RefreshControl,
   ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useLocalSearchParams, Stack, router, Link } from "expo-router";
-import { useAuth } from "@/src/providers/AuthProvider";
-import {
-  useOrder,
-  useOrderParticipants,
-  useOrderItems,
-  useAddItem,
-  useAddGuest,
-  useUpdateOrderStatus,
-  useDeleteOrder,
-  useDeleteItem,
-  useUpdateItem,
-  useLeaveOrder,
-  useRemoveParticipant,
-} from "@/src/hooks/useOrders";
-import { useRealtimeOrder, useRealtimeItems } from "@/src/hooks/useRealtimeOrder";
-import { formatShareLabels } from "@/src/utils/itemShares";
-import { Colors, Spacing, FontSize, BorderRadius } from "@/src/lib/constants";
 
 function AddItemModal({
   visible,
@@ -40,6 +45,7 @@ function AddItemModal({
   participantId,
   participants,
   isOwner,
+  restaurantId,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -47,12 +53,14 @@ function AddItemModal({
   participantId: string;
   participants: any[];
   isOwner: boolean;
+  restaurantId: string | null;
 }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [showPicker, setShowPicker] = useState(false);
   // Selected participants for this item (who it's assigned to / split with)
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(
-    new Set([participantId])
+    new Set([participantId]),
   );
   const [splitMode, setSplitMode] = useState<"equal" | "custom">("equal");
   // Per-participant weights (string state to allow blank/decimal entry)
@@ -101,7 +109,7 @@ function AddItemModal({
   // Sum of weights for currently selected participants (custom mode)
   const totalWeight = Array.from(selectedParticipants).reduce(
     (s, pid) => s + (parseFloat(weights[pid] ?? "0") || 0),
-    0
+    0,
   );
 
   const handleAdd = async () => {
@@ -170,10 +178,7 @@ function AddItemModal({
             <Text style={modalStyles.headerCancel}>Cancel</Text>
           </TouchableOpacity>
           <Text style={modalStyles.headerTitle}>Add Item</Text>
-          <TouchableOpacity
-            onPress={handleAdd}
-            disabled={addItem.isPending}
-          >
+          <TouchableOpacity onPress={handleAdd} disabled={addItem.isPending}>
             <Text
               style={[
                 modalStyles.headerAction,
@@ -185,26 +190,76 @@ function AddItemModal({
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={modalStyles.body} keyboardShouldPersistTaps="handled">
-          <Text style={modalStyles.label}>Item Name</Text>
-          <TextInput
-            style={modalStyles.input}
-            placeholder="e.g. Margherita Pizza"
-            placeholderTextColor={Colors.textTertiary}
-            value={name}
-            onChangeText={setName}
-            autoFocus
-          />
+        <ScrollView
+          style={modalStyles.body}
+          keyboardShouldPersistTaps="handled"
+        >
+          {restaurantId ? (
+            // Restaurant-tied order: menu picker is the only way to add items.
+            // The picker pre-fills name + price; user may edit before saving.
+            <>
+              <TouchableOpacity
+                style={modalStyles.pickFromMenuButton}
+                onPress={() => setShowPicker(true)}
+              >
+                <Text style={modalStyles.pickFromMenuText}>
+                  {name ? "Change item" : "+ Pick from menu"}
+                </Text>
+              </TouchableOpacity>
 
-          <Text style={modalStyles.label}>Price (optional)</Text>
-          <TextInput
-            style={modalStyles.input}
-            placeholder="0.00"
-            placeholderTextColor={Colors.textTertiary}
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="decimal-pad"
-          />
+              {name ? (
+                <>
+                  <Text style={modalStyles.label}>Item</Text>
+                  <TextInput
+                    style={modalStyles.input}
+                    value={name}
+                    onChangeText={setName}
+                  />
+                  <Text style={modalStyles.label}>Price</Text>
+                  <TextInput
+                    style={modalStyles.input}
+                    value={price}
+                    onChangeText={setPrice}
+                    keyboardType="decimal-pad"
+                  />
+                </>
+              ) : (
+                <Text style={modalStyles.helpText}>
+                  Pick an item from the menu to continue.
+                </Text>
+              )}
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={modalStyles.pickFromMenuButton}
+                onPress={() => setShowPicker(true)}
+              >
+                <Text style={modalStyles.pickFromMenuText}>
+                  + Pick from menu
+                </Text>
+              </TouchableOpacity>
+
+              <Text style={modalStyles.label}>Item Name</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="e.g. Margherita Pizza"
+                placeholderTextColor={Colors.textTertiary}
+                value={name}
+                onChangeText={setName}
+              />
+
+              <Text style={modalStyles.label}>Price (optional)</Text>
+              <TextInput
+                style={modalStyles.input}
+                placeholder="0.00"
+                placeholderTextColor={Colors.textTertiary}
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="decimal-pad"
+              />
+            </>
+          )}
 
           {participants.length > 1 && (
             <>
@@ -275,8 +330,8 @@ function AddItemModal({
 
               {splitMode === "custom" && (
                 <Text style={modalStyles.helpText}>
-                  Pick people and set a weight per person. Higher weight = larger
-                  share.
+                  Pick people and set a weight per person. Higher weight =
+                  larger share.
                 </Text>
               )}
 
@@ -284,9 +339,7 @@ function AddItemModal({
               <View style={modalStyles.participantList}>
                 {participants.map((p) => {
                   const pName =
-                    p.profiles?.display_name ??
-                    p.guests?.name ??
-                    "Unknown";
+                    p.profiles?.display_name ?? p.guests?.name ?? "Unknown";
                   const isMe = p.id === participantId;
                   const selected = selectedParticipants.has(p.id);
                   const weight = parseFloat(weights[p.id] ?? "0") || 0;
@@ -356,6 +409,17 @@ function AddItemModal({
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <PickFromMenuSheet
+        visible={showPicker}
+        onClose={() => setShowPicker(false)}
+        restaurantId={restaurantId ?? undefined}
+        onPickItem={(picked) => {
+          setName(picked.name);
+          setPrice(picked.price.toFixed(2));
+          setShowPicker(false);
+        }}
+      />
     </Modal>
   );
 }
@@ -404,10 +468,7 @@ function AddGuestModal({
             <Text style={modalStyles.headerCancel}>Cancel</Text>
           </TouchableOpacity>
           <Text style={modalStyles.headerTitle}>Add Guest</Text>
-          <TouchableOpacity
-            onPress={handleAdd}
-            disabled={addGuest.isPending}
-          >
+          <TouchableOpacity onPress={handleAdd} disabled={addGuest.isPending}>
             <Text
               style={[
                 modalStyles.headerAction,
@@ -474,8 +535,7 @@ export default function OrderDetail() {
     if (!isOpen) return;
     // Only allow editing if you're the owner or you added the item
     const canEdit =
-      isOwner ||
-      item.added_by_participant_id === myParticipant?.id;
+      isOwner || item.added_by_participant_id === myParticipant?.id;
     if (!canEdit) return;
 
     Alert.alert(item.name, undefined, [
@@ -493,8 +553,7 @@ export default function OrderDetail() {
             {
               text: "Delete",
               style: "destructive",
-              onPress: () =>
-                deleteItem.mutate({ itemId: item.id, orderId }),
+              onPress: () => deleteItem.mutate({ itemId: item.id, orderId }),
             },
           ]);
         },
@@ -504,22 +563,20 @@ export default function OrderDetail() {
 
   const handleLock = () => {
     if (!items?.length) {
-      Alert.alert("No Items", "Add at least one item before locking the order.");
+      Alert.alert(
+        "No Items",
+        "Add at least one item before locking the order.",
+      );
       return;
     }
 
-    Alert.alert(
-      "Lock Order",
-      "No more items can be added after locking.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Lock",
-          onPress: () =>
-            updateStatus.mutate({ orderId, status: "locked" }),
-        },
-      ]
-    );
+    Alert.alert("Lock Order", "No more items can be added after locking.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Lock",
+        onPress: () => updateStatus.mutate({ orderId, status: "locked" }),
+      },
+    ]);
   };
 
   const handleReopen = () => {
@@ -544,7 +601,7 @@ export default function OrderDetail() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -575,35 +632,31 @@ export default function OrderDetail() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
   const handleRemoveParticipant = (p: any) => {
     const targetName =
       p.profiles?.display_name ?? p.guests?.name ?? "this person";
-    Alert.alert(
-      "Remove from order",
-      `Remove ${targetName} from this order?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await removeParticipant.mutateAsync({
-                orderId,
-                participantId: p.id,
-                targetName,
-              });
-            } catch (error: any) {
-              Alert.alert("Cannot remove", error.message);
-            }
-          },
+    Alert.alert("Remove from order", `Remove ${targetName} from this order?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await removeParticipant.mutateAsync({
+              orderId,
+              participantId: p.id,
+              targetName,
+            });
+          } catch (error: any) {
+            Alert.alert("Cannot remove", error.message);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   if (isLoading || !order) {
@@ -618,15 +671,14 @@ export default function OrderDetail() {
     order.status === "open"
       ? Colors.success
       : order.status === "locked"
-      ? Colors.warning
-      : order.status === "finalized"
-      ? Colors.primary
-      : Colors.textTertiary;
+        ? Colors.warning
+        : order.status === "finalized"
+          ? Colors.primary
+          : Colors.textTertiary;
 
-  const itemsTotal = items?.reduce(
-    (sum, item) => sum + (item.price ?? 0) * item.quantity,
-    0
-  ) ?? 0;
+  const itemsTotal =
+    items?.reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0) ??
+    0;
 
   return (
     <View style={styles.container}>
@@ -637,10 +689,10 @@ export default function OrderDetail() {
           showMineOnly && myParticipant
             ? (items ?? []).filter((it: any) =>
                 (it.item_shares ?? []).some(
-                  (s: any) => s.participant_id === myParticipant.id
-                )
+                  (s: any) => s.participant_id === myParticipant.id,
+                ),
               )
-            : items ?? []
+            : (items ?? [])
         }
         keyExtractor={(item) => item.id}
         refreshControl={
@@ -665,6 +717,42 @@ export default function OrderDetail() {
               )}
             </View>
 
+            {/* Restaurant context (only if order is restaurant-tied) */}
+            {order.restaurant && (
+              <View style={styles.restaurantBanner}>
+                {order.restaurant.logo_url ? (
+                  <Image
+                    source={{ uri: order.restaurant.logo_url }}
+                    style={styles.restaurantBannerLogo}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.restaurantBannerLogo,
+                      { backgroundColor: Colors.primaryLight },
+                    ]}
+                  >
+                    <Text style={styles.restaurantBannerLogoText}>
+                      {order.restaurant.name[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.restaurantBannerLabel}>
+                    Ordering from
+                  </Text>
+                  <Text style={styles.restaurantBannerName}>
+                    {order.restaurant.name}
+                  </Text>
+                  {order.restaurant.cuisine && (
+                    <Text style={styles.restaurantBannerCuisine}>
+                      {order.restaurant.cuisine}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
             {/* Participants */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -679,20 +767,30 @@ export default function OrderDetail() {
               </View>
               <View style={styles.participantsList}>
                 {participants?.map((p) => {
-                  const name = p.profiles?.display_name ?? p.guests?.name ?? "?";
+                  const name =
+                    p.profiles?.display_name ?? p.guests?.name ?? "?";
                   const isGuest = !!p.guest_id;
                   const isCreatorRow = p.user_id === order.created_by;
                   const canRemove = isOwner && isOpen && !isCreatorRow;
                   return (
                     <View key={p.id} style={styles.participantItem}>
-                      <View style={[styles.participantAvatar, isGuest && styles.participantAvatarGuest]}>
+                      <View
+                        style={[
+                          styles.participantAvatar,
+                          isGuest && styles.participantAvatarGuest,
+                        ]}
+                      >
                         <Text style={styles.participantAvatarText}>
                           {name[0].toUpperCase()}
                         </Text>
                       </View>
                       <View style={styles.participantInfo}>
-                        <Text style={styles.participantName} numberOfLines={1}>{name}</Text>
-                        {isGuest && <Text style={styles.participantGuestTag}>Guest</Text>}
+                        <Text style={styles.participantName} numberOfLines={1}>
+                          {name}
+                        </Text>
+                        {isGuest && (
+                          <Text style={styles.participantGuestTag}>Guest</Text>
+                        )}
                       </View>
                       {canRemove && (
                         <TouchableOpacity
@@ -734,7 +832,12 @@ export default function OrderDetail() {
                   </TouchableOpacity>
                 )}
                 {isOpen && myParticipant && (
-                  <TouchableOpacity onPress={() => { refetchParticipants(); setShowAddItem(true); }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      refetchParticipants();
+                      setShowAddItem(true);
+                    }}
+                  >
                     <Text style={styles.addLink}>+ Add Item</Text>
                   </TouchableOpacity>
                 )}
@@ -763,7 +866,7 @@ export default function OrderDetail() {
             (pid) => {
               const p = participants?.find((p) => p.id === pid);
               return p?.profiles?.display_name ?? p?.guests?.name ?? null;
-            }
+            },
           );
 
           const isSharedItem = shareLabels.length > 1;
@@ -785,9 +888,7 @@ export default function OrderDetail() {
                 ) : null}
               </View>
               <Text style={styles.itemPrice}>
-                {item.price != null
-                  ? `${item.price.toFixed(2)}`
-                  : "No price"}
+                {item.price != null ? `${item.price.toFixed(2)}` : "No price"}
               </Text>
             </TouchableOpacity>
           );
@@ -797,18 +898,13 @@ export default function OrderDetail() {
             {(items?.length ?? 0) > 0 && (
               <View style={styles.totalRow}>
                 <Text style={styles.totalLabel}>Items Total</Text>
-                <Text style={styles.totalAmount}>
-                  {itemsTotal.toFixed(2)}
-                </Text>
+                <Text style={styles.totalAmount}>{itemsTotal.toFixed(2)}</Text>
               </View>
             )}
 
             {/* Actions */}
             {isOwner && isOpen && (
-              <TouchableOpacity
-                style={styles.lockButton}
-                onPress={handleLock}
-              >
+              <TouchableOpacity style={styles.lockButton} onPress={handleLock}>
                 <Text style={styles.lockButtonText}>Lock Order</Text>
               </TouchableOpacity>
             )}
@@ -816,7 +912,9 @@ export default function OrderDetail() {
             {isOwner && isLocked && (
               <>
                 <Link
-                  href={`/(tabs)/groups/${groupId}/orders/${orderId}/finalize` as any}
+                  href={
+                    `/(tabs)/groups/${groupId}/orders/${orderId}/finalize` as any
+                  }
                   asChild
                 >
                   <TouchableOpacity style={styles.finalizeButton}>
@@ -842,7 +940,11 @@ export default function OrderDetail() {
             )}
 
             {!myParticipant && isOpen && user && (
-              <JoinOrderButton orderId={orderId} userId={user.id} onJoined={refetchParticipants} />
+              <JoinOrderButton
+                orderId={orderId}
+                userId={user.id}
+                onJoined={refetchParticipants}
+              />
             )}
 
             {myParticipant && !isOwner && isOpen && (
@@ -869,6 +971,7 @@ export default function OrderDetail() {
           participantId={myParticipant.id}
           participants={participants ?? []}
           isOwner={isOwner}
+          restaurantId={order.restaurant_id ?? null}
         />
       )}
 
@@ -898,9 +1001,10 @@ export default function OrderDetail() {
                       itemId: editingItem.id,
                       orderId,
                       name: editingItem._editName ?? editingItem.name,
-                      price: editingItem._editPrice !== undefined
-                        ? (parseFloat(editingItem._editPrice) || null)
-                        : editingItem.price,
+                      price:
+                        editingItem._editPrice !== undefined
+                          ? parseFloat(editingItem._editPrice) || null
+                          : editingItem.price,
                     });
                     setEditingItem(null);
                   } catch (error: any) {
@@ -927,7 +1031,7 @@ export default function OrderDetail() {
                 value={
                   editingItem._editPrice !== undefined
                     ? editingItem._editPrice
-                    : editingItem.price?.toString() ?? ""
+                    : (editingItem.price?.toString() ?? "")
                 }
                 onChangeText={(v) =>
                   setEditingItem({ ...editingItem, _editPrice: v })
@@ -986,83 +1090,398 @@ function JoinOrderButton({
 
 const modalStyles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: Spacing.md, paddingTop: Platform.OS === "ios" ? 60 : Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.surface },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: Spacing.md,
+    paddingTop: Platform.OS === "ios" ? 60 : Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
   headerCancel: { fontSize: FontSize.md, color: Colors.textSecondary },
   headerTitle: { fontSize: FontSize.md, fontWeight: "600", color: Colors.text },
-  headerAction: { fontSize: FontSize.md, color: Colors.primary, fontWeight: "600" },
+  headerAction: {
+    fontSize: FontSize.md,
+    color: Colors.primary,
+    fontWeight: "600",
+  },
   body: { padding: Spacing.lg },
-  label: { fontSize: FontSize.sm, fontWeight: "600", color: Colors.text, marginTop: Spacing.md, marginBottom: Spacing.xs },
-  subtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
-  input: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: BorderRadius.md, padding: Spacing.md, fontSize: FontSize.md, color: Colors.text },
-  quickActions: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs, marginTop: Spacing.xs, marginBottom: Spacing.sm },
-  quickAction: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
-  quickActionActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + "15" },
-  quickActionText: { fontSize: FontSize.sm, color: Colors.textSecondary, fontWeight: "500" },
+  label: {
+    fontSize: FontSize.sm,
+    fontWeight: "600",
+    color: Colors.text,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+  },
+  subtitle: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.md,
+  },
+  input: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    fontSize: FontSize.md,
+    color: Colors.text,
+  },
+  pickFromMenuButton: {
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "10",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  pickFromMenuText: {
+    fontSize: FontSize.sm,
+    color: Colors.primary,
+    fontWeight: "700",
+  },
+  quickActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  quickAction: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  quickActionActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "15",
+  },
+  quickActionText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    fontWeight: "500",
+  },
   quickActionTextActive: { color: Colors.primary, fontWeight: "600" },
-  helpText: { fontSize: FontSize.xs, color: Colors.textSecondary, marginBottom: Spacing.xs },
+  helpText: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
   participantList: { marginTop: Spacing.sm, gap: Spacing.xs },
-  participantRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, padding: Spacing.sm, borderRadius: BorderRadius.sm, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
-  participantRowSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary + "10" },
-  participantTapTarget: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, flex: 1 },
+  participantRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  participantRowSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "10",
+  },
+  participantTapTarget: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    flex: 1,
+  },
   participantName: { fontSize: FontSize.md, color: Colors.text },
-  checkbox: { width: 22, height: 22, borderRadius: 4, borderWidth: 2, borderColor: Colors.border },
-  checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: Colors.border,
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
   weightWrap: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
-  weightInput: { width: 56, paddingVertical: 6, paddingHorizontal: Spacing.sm, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background, fontSize: FontSize.md, color: Colors.text, textAlign: "center" },
-  weightPct: { fontSize: FontSize.xs, color: Colors.textSecondary, minWidth: 38, textAlign: "right" },
-  totalWeight: { fontSize: FontSize.sm, color: Colors.textSecondary, marginTop: Spacing.sm, fontStyle: "italic" },
+  weightInput: {
+    width: 56,
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.background,
+    fontSize: FontSize.md,
+    color: Colors.text,
+    textAlign: "center",
+  },
+  weightPct: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    minWidth: 38,
+    textAlign: "right",
+  },
+  totalWeight: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginTop: Spacing.sm,
+    fontStyle: "italic",
+  },
 });
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: Colors.background },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Colors.background,
+  },
   listContent: { padding: Spacing.lg },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.lg },
-  statusBadge: { paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs, borderRadius: BorderRadius.sm },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  statusBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+  },
   statusText: { fontSize: FontSize.xs, fontWeight: "700", letterSpacing: 1 },
   ownerTag: { fontSize: FontSize.xs, color: Colors.textSecondary },
+  restaurantBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    backgroundColor: Colors.primary + "10",
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.primary + "30",
+  },
+  restaurantBannerLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  restaurantBannerLogoText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: FontSize.md,
+  },
+  restaurantBannerLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  restaurantBannerName: {
+    fontSize: FontSize.md,
+    fontWeight: "700",
+    color: Colors.text,
+    marginTop: 2,
+  },
+  restaurantBannerCuisine: {
+    fontSize: FontSize.xs,
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
   section: { marginBottom: Spacing.lg },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm },
-  sectionTitle: { fontSize: FontSize.lg, fontWeight: "700", color: Colors.text },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  sectionTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: "700",
+    color: Colors.text,
+  },
   addLink: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: "600" },
   participantsList: { gap: Spacing.xs },
-  participantItem: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: Spacing.xs },
-  participantAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.primaryLight, justifyContent: "center", alignItems: "center" },
+  participantItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  participantAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   participantAvatarGuest: { backgroundColor: Colors.secondaryLight },
-  participantAvatarText: { color: "#FFFFFF", fontSize: FontSize.xs, fontWeight: "700" },
+  participantAvatarText: {
+    color: "#FFFFFF",
+    fontSize: FontSize.xs,
+    fontWeight: "700",
+  },
   participantInfo: { flex: 1 },
-  participantName: { fontSize: FontSize.sm, color: Colors.text, fontWeight: "500" },
+  participantName: {
+    fontSize: FontSize.sm,
+    color: Colors.text,
+    fontWeight: "500",
+  },
   participantGuestTag: { fontSize: FontSize.xs, color: Colors.textTertiary },
   emptyItems: { alignItems: "center", paddingVertical: Spacing.xl },
-  emptyText: { fontSize: FontSize.md, fontWeight: "600", color: Colors.textSecondary },
-  emptySubtext: { fontSize: FontSize.sm, color: Colors.textTertiary, marginTop: Spacing.xs },
-  itemRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: Colors.surface, padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: Colors.border, marginBottom: Spacing.sm },
+  emptyText: {
+    fontSize: FontSize.md,
+    fontWeight: "600",
+    color: Colors.textSecondary,
+  },
+  emptySubtext: {
+    fontSize: FontSize.sm,
+    color: Colors.textTertiary,
+    marginTop: Spacing.xs,
+  },
+  itemRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.sm,
+  },
   itemInfo: { flex: 1, gap: 2 },
   itemName: { fontSize: FontSize.md, color: Colors.text, fontWeight: "500" },
-  sharedLabel: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: "500" },
+  sharedLabel: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    fontWeight: "500",
+  },
   addedByLabel: { fontSize: FontSize.xs, color: Colors.textTertiary },
   itemPrice: { fontSize: FontSize.md, fontWeight: "600", color: Colors.text },
   footer: { marginTop: Spacing.md, gap: Spacing.sm },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
   totalLabel: { fontSize: FontSize.md, fontWeight: "600", color: Colors.text },
   totalAmount: { fontSize: FontSize.md, fontWeight: "700", color: Colors.text },
-  lockButton: { backgroundColor: Colors.warning, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },
-  lockButtonText: { color: "#FFFFFF", fontSize: FontSize.md, fontWeight: "600" },
-  finalizeButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },
-  finalizeButtonText: { color: "#FFFFFF", fontSize: FontSize.md, fontWeight: "600" },
-  reopenButton: { backgroundColor: Colors.surfaceSecondary, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center", borderWidth: 1, borderColor: Colors.border },
-  reopenButtonText: { color: Colors.text, fontSize: FontSize.md, fontWeight: "600" },
-  deleteButton: { backgroundColor: Colors.errorLight, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },
-  deleteButtonText: { color: Colors.error, fontSize: FontSize.md, fontWeight: "600" },
-  joinButton: { backgroundColor: Colors.primary, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },
-  joinButtonText: { color: "#FFFFFF", fontSize: FontSize.md, fontWeight: "600" },
-  leaveOrderButton: { backgroundColor: Colors.errorLight, borderRadius: BorderRadius.md, padding: Spacing.md, alignItems: "center" },
-  leaveOrderButtonText: { color: Colors.error, fontSize: FontSize.md, fontWeight: "600" },
-  removeParticipantBtn: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: Colors.surfaceSecondary },
-  removeParticipantBtnText: { fontSize: FontSize.lg, color: Colors.textSecondary, lineHeight: FontSize.lg },
-  itemsHeaderActions: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
-  filterToggle: { paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface },
-  filterToggleActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + "15" },
-  filterToggleText: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: "500" },
+  lockButton: {
+    backgroundColor: Colors.warning,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: "center",
+  },
+  lockButtonText: {
+    color: "#FFFFFF",
+    fontSize: FontSize.md,
+    fontWeight: "600",
+  },
+  finalizeButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: "center",
+  },
+  finalizeButtonText: {
+    color: "#FFFFFF",
+    fontSize: FontSize.md,
+    fontWeight: "600",
+  },
+  reopenButton: {
+    backgroundColor: Colors.surfaceSecondary,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  reopenButtonText: {
+    color: Colors.text,
+    fontSize: FontSize.md,
+    fontWeight: "600",
+  },
+  deleteButton: {
+    backgroundColor: Colors.errorLight,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: "center",
+  },
+  deleteButtonText: {
+    color: Colors.error,
+    fontSize: FontSize.md,
+    fontWeight: "600",
+  },
+  joinButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: "center",
+  },
+  joinButtonText: {
+    color: "#FFFFFF",
+    fontSize: FontSize.md,
+    fontWeight: "600",
+  },
+  leaveOrderButton: {
+    backgroundColor: Colors.errorLight,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: "center",
+  },
+  leaveOrderButtonText: {
+    color: Colors.error,
+    fontSize: FontSize.md,
+    fontWeight: "600",
+  },
+  removeParticipantBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surfaceSecondary,
+  },
+  removeParticipantBtnText: {
+    fontSize: FontSize.lg,
+    color: Colors.textSecondary,
+    lineHeight: FontSize.lg,
+  },
+  itemsHeaderActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  filterToggle: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+  },
+  filterToggleActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + "15",
+  },
+  filterToggleText: {
+    fontSize: FontSize.xs,
+    color: Colors.textSecondary,
+    fontWeight: "500",
+  },
   filterToggleTextActive: { color: Colors.primary, fontWeight: "600" },
 });

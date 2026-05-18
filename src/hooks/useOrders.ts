@@ -21,6 +21,15 @@ export type Order = {
   discount: number;
   created_at: string;
   finalized_at: string | null;
+  restaurant_id: string | null;
+  restaurant?: {
+    id: string;
+    name: string;
+    logo_url: string | null;
+    image_url: string | null;
+    cuisine: string | null;
+    currency: string;
+  } | null;
 };
 
 export type OrderParticipant = {
@@ -89,12 +98,14 @@ export function useOrder(orderId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*")
+        .select(
+          "*, restaurant:restaurant_id(id, name, logo_url, image_url, cuisine, currency)"
+        )
         .eq("id", orderId)
         .single();
 
       if (error) throw error;
-      return data as Order;
+      return data as unknown as Order;
     },
     enabled: !!orderId,
   });
@@ -153,13 +164,19 @@ export function useCreateOrder() {
     mutationFn: async ({
       groupId,
       title,
+      restaurantId,
     }: {
       groupId: string;
       title: string;
+      restaurantId?: string | null;
     }) => {
       const { data: order, error: orderError } = await supabase
         .from("orders")
-        .insert({ group_id: groupId, title })
+        .insert({
+          group_id: groupId,
+          title,
+          ...(restaurantId ? { restaurant_id: restaurantId } : {}),
+        })
         .select()
         .single();
 
