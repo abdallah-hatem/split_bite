@@ -108,6 +108,31 @@ Why both checks matter:
 
 **OTA reach:** updates only reach builds on the **same runtime version** (= the same `expo.version`, given the `appVersion` policy). Bumping `expo.version` forks the channel — see the version-train rule under "App Store / EAS quick reference".
 
+## Restaurant catalogue + scraping (admin-only)
+
+A restaurant catalogue with menus lives in three tables (`restaurants`, `menu_categories`, `menu_items`) and powers two app features:
+- **Restaurant-tied orders.** When `orders.restaurant_id` is set, the Add Item modal hides free-text inputs and locks item entry to that restaurant's menu. Free-form orders still work when `restaurant_id` is null.
+- **Pick-from-menu shortcut.** Even free-form orders can use the menu picker to populate item name + price in one tap.
+
+**Schema is source-agnostic** via `(external_source, external_id)` — `'talabat'` is the first source; future `'manual'` / `'foursquare'` etc. drop in without schema changes.
+
+**Scraping is local-only and admin-curated.** Talabat ToS forbids automated scraping; Apple's 5.2.2 could reject apps that obviously rip data. Mitigations: scraper runs only on the maintainer's Mac (no production scraping infra), runs only against URLs the maintainer explicitly invokes, and is rate-limited to 6h per restaurant.
+
+To add or refresh a restaurant:
+```bash
+# One-time setup
+cp scripts/.env.scraper.example scripts/.env.scraper.local
+# Edit the .local file to point at local or cloud Supabase + service-role key.
+
+# Each restaurant
+npm run scrape:talabat -- https://www.talabat.com/egypt/restaurant/<id>/<slug>
+# Add --force to override the 6h re-scrape guard.
+```
+
+The scraper fetches the public Talabat URL, extracts the `__NEXT_DATA__` SSR JSON blob, validates structure (loud failure if Talabat changes shape), and upserts via the service-role key. RLS allows any signed-in user to read all three tables; no write policies, so only the service-role key can mutate.
+
+**When the Talabat shape changes**, the scraper will print a clear "menuData missing / shape changed" error. Inspect `__NEXT_DATA__.props.pageProps.initialMenuState` on a fresh page to find what moved.
+
 ## Auto mode reminder
 
 When auto mode is on, the harness wants action over questions for routine code work. Auto mode does NOT relax:
